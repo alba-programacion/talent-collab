@@ -1,4 +1,3 @@
-import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { Briefcase, Building, FileText, Clock } from 'lucide-react';
@@ -11,7 +10,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch(API_URL + '/api/metrics');
+        const res = await fetch('http://localhost:5000/api/metrics');
         const data = await res.json();
         setMetrics(data);
       } catch (e) {

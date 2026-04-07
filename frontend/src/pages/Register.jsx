@@ -1,4 +1,3 @@
-import { API_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
@@ -16,7 +15,7 @@ const Register = () => {
   const [institutions, setInstitutions] = useState([]);
 
   useEffect(() => {
-    fetch(API_URL + '/api/institutions')
+    fetch('http://localhost:5000/api/institutions')
       .then(res => res.json())
       .then(data => setInstitutions(data))
       .catch(console.error);
@@ -44,7 +43,7 @@ const Register = () => {
         newInstitutionProfile: institutionId === 'NEW' ? newInstitutionProfile : undefined
       };
 
-      const res = await fetch(API_URL + '/api/auth/register', {
+      const res = await fetch('http://localhost:5000/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

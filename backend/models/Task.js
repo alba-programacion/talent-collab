@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const taskSchema = new mongoose.Schema({
   type: { type: String, enum: ['REVIEW_CV', 'REQUEST_CVS'], required: true },
   senderId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  senderEmail: { type: String },
   targetEmail: { type: String, required: true },
   targetVacancyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vacancy' },
   cvId: { type: mongoose.Schema.Types.ObjectId, ref: 'CV' },

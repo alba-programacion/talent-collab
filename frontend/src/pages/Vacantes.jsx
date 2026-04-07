@@ -1,7 +1,6 @@
-import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
-import { Briefcase, Building, Clock, Users, FileText, X, Plus } from 'lucide-react';
+import { Briefcase, Building, Clock, Users, FileText, X, Plus, Send } from 'lucide-react';
 
 const Vacantes = () => {
   const { user } = useAuth();
@@ -15,9 +14,13 @@ const Vacantes = () => {
   const [selectedVacancy, setSelectedVacancy] = useState(null);
 
   // Forms state
-  const [form, setForm] = useState({ role: '', salary: '', description: '', institutionId: '' });
+  const [form, setForm] = useState({ 
+    role: '', salary: '', location: '', modality: 'Presencial',
+    knowledgeTest: '', language: '', activities: '', confidential: false,
+    age: '', gender: 'Indistinto', skills: '', institutionId: ''
+  });
   const [applyForm, setApplyForm] = useState({ name: '', email: '' });
-  const [requestSlaForm, setRequestSlaForm] = useState({ targetEmail: '', description: '', dueDate: '' });
+  const [requestCvForm, setRequestCvForm] = useState({ targetInstitutionId: '', description: '' });
   const [documentFile, setDocumentFile] = useState(null);
   
   // Messages
@@ -26,7 +29,7 @@ const Vacantes = () => {
 
   const fetchVacancies = async () => {
     try {
-      const res = await fetch(API_URL + '/api/vacancies');
+      const res = await fetch('http://localhost:5000/api/vacancies');
       const data = await res.json();
       setVacancies(data);
     } catch (e) {
@@ -38,9 +41,13 @@ const Vacantes = () => {
 
   const fetchAllCvs = async () => {
     try {
-      const res = await fetch(API_URL + '/api/cvs');
+      const res = await fetch('http://localhost:5000/api/cvs');
       const data = await res.json();
-      setAllCvs(data);
+      const normalizedData = data.map(c => ({
+        ...c,
+        targetVacancyId: c.targetVacancyId?._id || c.targetVacancyId
+      }));
+      setAllCvs(normalizedData);
     } catch (e) {
       console.error(e);
     }
@@ -48,7 +55,7 @@ const Vacantes = () => {
 
   const fetchInstitutions = async () => {
     try {
-      const res = await fetch(API_URL + '/api/institutions');
+      const res = await fetch('http://localhost:5000/api/institutions');
       const data = await res.json();
       setInstitutions(data);
     } catch (e) {
@@ -74,13 +81,17 @@ const Vacantes = () => {
     }
 
     try {
-      const res = await fetch(API_URL + '/api/vacancies', {
+      const res = await fetch('http://localhost:5000/api/vacancies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, institutionId: user?.institutionId })
       });
       if (!res.ok) throw new Error('Error al crear vacante');
-      setForm({ role: '', salary: '', description: '', institutionId: '' });
+      setForm({ 
+        role: '', salary: '', location: '', modality: 'Presencial',
+        knowledgeTest: '', language: '', activities: '', confidential: false,
+        age: '', gender: 'Indistinto', skills: '', institutionId: ''
+      });
       setShowAddModal(false);
       fetchVacancies();
     } catch (err) {
@@ -101,7 +112,7 @@ const Vacantes = () => {
     formData.append('document', documentFile);
 
     try {
-      const res = await fetch(API_URL + '/api/cvs/vacancy', {
+      const res = await fetch('http://localhost:5000/api/cvs/vacancy', {
         method: 'POST',
         body: formData
       });
@@ -117,6 +128,85 @@ const Vacantes = () => {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleUpdateCvStatus = async (cvId, newStatus) => {
+    let rejectedReason = '';
+    let rejectedBy = '';
+    if (newStatus === 'Rechazado') {
+      rejectedReason = window.prompt("Motivo de rechazo de este candidato (obligatorio):");
+      if (!rejectedReason) return; // User cancelled
+      rejectedBy = user?.institutionName || 'Institución';
+    }
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/cvs/${cvId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus, rejectedReason, rejectedBy })
+      });
+      if (!res.ok) throw new Error('Error al actualizar status');
+      fetchAllCvs(); // refresh the list
+      
+      if (newStatus === 'Rechazado') {
+         setSelectedVacancy(prev => ({...prev, cvCount: prev.cvCount - 1}));
+      }
+    } catch(err) { alert(err.message) }
+  };
+
+  const handleUpdateVacancyStatus = async (vacancyId, newStatus) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/vacancies/${vacancyId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) throw new Error('Error al actualizar status de vacante');
+      fetchVacancies();
+      if(selectedVacancy && selectedVacancy.id === vacancyId) {
+        setSelectedVacancy({...selectedVacancy, status: newStatus});
+      }
+    } catch(err) { alert(err.message) }
+  };
+
+  const handleRequestCv = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    if (!requestCvForm.targetInstitutionId) return setError('Selecciona una institución válida.');
+
+    try {
+      const res = await fetch('http://localhost:5000/api/tasks/request-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetVacancyId: selectedVacancy.id,
+          senderEmail: user.email,
+          targetInstitutionId: requestCvForm.targetInstitutionId,
+          description: requestCvForm.description || `Por favor buscamos candidatos para: ${selectedVacancy.role}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al solicitar CV');
+      
+      setSuccess('¡Solicitud enviada a la institución!');
+      setRequestCvForm({ targetInstitutionId: '', description: '' });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const calculateProgress = () => {
+    let p = 0;
+    if (form.role?.trim() !== '') p += 10;
+    if (form.salary?.trim() !== '') p += 10;
+    if (form.location?.trim() !== '') p += 10;
+    if (form.activities?.trim() !== '') p += 20;
+    if (form.skills?.trim() !== '') p += 20;
+    if (form.modality?.trim() !== '') p += 10;
+    if (form.language?.trim() !== '') p += 10;
+    if (form.age?.trim() !== '') p += 5;
+    if (form.gender?.trim() !== '') p += 5;
+    return p > 100 ? 100 : p;
   };
 
   return (
@@ -150,24 +240,24 @@ const Vacantes = () => {
                 <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                   <Briefcase className="w-6 h-6 text-blue-500" />
                 </div>
-                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                  v.status === 'Abierta' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
-                  v.status === 'Pausada' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
-                  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                }`}>
-                  {v.status}
-                </span>
+                <select 
+                  value={v.status}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => { e.stopPropagation(); handleUpdateVacancyStatus(v.id, e.target.value); }}
+                  className={`text-xs px-2 py-1 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${v.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : v.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                >
+                  <option value="Abierta">Abierta</option>
+                  <option value="Pausada">Pausada</option>
+                  <option value="Cerrada">Cerrada</option>
+                </select>
               </div>
               
               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{v.role}</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-3 h-10">{v.activities}</p>
               
-              <div className="flex items-center text-sm text-slate-500 dark:text-slate-400 mb-2 gap-2">
-                <Building className="w-4 h-4" />
-                <span>{v.institutionName}</span>
-              </div>
-              <div className="flex items-center text-sm text-slate-500 dark:text-slate-400 mb-4 gap-2">
-                <Clock className="w-4 h-4" />
-                <span>Publicada: {v.date}</span>
+              <div className="flex flex-wrap items-center gap-4 text-sm font-semibold mb-4">
+                <span className="flex items-center gap-1.5 bg-slate-100 text-slate-700 dark:bg-slate-900 dark:text-slate-300 px-3 py-1 rounded-xl"><Building className="w-4 h-4"/> {v.institutionName}</span>
+                <span className="flex items-center gap-1.5 bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400 px-3 py-1 rounded-xl"><Briefcase className="w-4 h-4"/> {v.modality || 'Presencial'}</span>
               </div>
               
               <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
@@ -193,18 +283,80 @@ const Vacantes = () => {
             </div>
             {error && showAddModal && <div className="m-6 mb-0 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">{error}</div>}
             
-            <form onSubmit={handleAddVacancy} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium dark:text-slate-300 mb-1">Rol / Puesto</label>
-                <input type="text" value={form.role} onChange={e=>setForm({...form, role: e.target.value})} required className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+            <div className="px-6 pt-4">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Completitud de la Vacante</span>
+                <span className="text-[11px] font-black text-blue-600 dark:text-blue-400">{calculateProgress()}%</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium dark:text-slate-300 mb-1">Salario Ofrecido</label>
-                <input type="text" value={form.salary} onChange={e=>setForm({...form, salary: e.target.value})} placeholder="Ej. $20,000 - $25,000 MXN" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+              <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-1">
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${calculateProgress()}%` }}></div>
               </div>
+            </div>
+
+            <form onSubmit={handleAddVacancy} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Puesto Solicitado</label>
+                  <input type="text" value={form.role} onChange={e=>setForm({...form, role: e.target.value})} required className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Rango Salarial</label>
+                  <input type="text" value={form.salary} onChange={e=>setForm({...form, salary: e.target.value})} placeholder="Ej. $20,000 - $25,000 MXN" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Modalidad</label>
+                  <select value={form.modality} onChange={e=>setForm({...form, modality: e.target.value})} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
+                    <option value="Presencial">Presencial</option>
+                    <option value="Virtual">Virtual</option>
+                    <option value="Híbrida">Híbrida</option>
+                    <option value="Medio Tiempo">Medio Tiempo</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Ubicación Geográfica</label>
+                  <input type="text" value={form.location} onChange={e=>setForm({...form, location: e.target.value})} placeholder="Ciudad, Estado..." className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Rango de Edad Recomendado</label>
+                  <input type="text" value={form.age} onChange={e=>setForm({...form, age: e.target.value})} placeholder="Ej. 25 a 35 años" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Sexo Requerido</label>
+                  <select value={form.gender} onChange={e=>setForm({...form, gender: e.target.value})} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
+                    <option value="Indistinto">Indistinto</option>
+                    <option value="Masculino">Masculino</option>
+                    <option value="Femenino">Femenino</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-medium dark:text-slate-300 mb-1">Descripción de la vacante</label>
-                <textarea value={form.description} onChange={e=>setForm({...form, description: e.target.value})} rows="4" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none" required></textarea>
+                <label className="block text-sm font-medium dark:text-slate-300 mb-1">Habilidades Duras y Blandas</label>
+                <textarea value={form.skills} onChange={e=>setForm({...form, skills: e.target.value})} rows="2" placeholder="Gestión de proyectos, Trabajo en equipo, Python..." className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none"></textarea>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Dominio de Idiomas</label>
+                  <input type="text" value={form.language} onChange={e=>setForm({...form, language: e.target.value})} placeholder="Ej. Inglés B2" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Prueba de Conocimientos</label>
+                  <input type="text" value={form.knowledgeTest} onChange={e=>setForm({...form, knowledgeTest: e.target.value})} placeholder="Sí (Examen Técnico), No, etc." className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium dark:text-slate-300 mb-1">Descripción de Actividades</label>
+                <textarea value={form.activities} onChange={e=>setForm({...form, activities: e.target.value})} rows="3" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white resize-none" required></textarea>
+              </div>
+
+              <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/10 p-3 rounded-xl border border-red-100 dark:border-red-900/50">
+                <input type="checkbox" id="confidentialCheck" checked={form.confidential} onChange={e=>setForm({...form, confidential: e.target.checked})} className="w-5 h-5 text-red-600 rounded bg-white border-slate-300 cursor-pointer" />
+                <label htmlFor="confidentialCheck" className="text-sm font-bold text-red-700 dark:text-red-400 cursor-pointer select-none">Vacante Confidencial (Ocultar datos al exterior)</label>
               </div>
 
                 <div>
@@ -229,103 +381,160 @@ const Vacantes = () => {
            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden glass-panel flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start p-6 border-b border-slate-200 dark:border-slate-800 relative">
               <div>
-                <div className="flex items-center gap-3 mb-3">
-                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 inline-block">Inst. {selectedVacancy.institutionId}</span>
-                  {selectedVacancy.institutionId === user?.institutionId ? (
-                    <select 
-                      value={selectedVacancy.status} 
-                      onChange={(e) => handleStatusChange(e.target.value)}
-                      className="px-2 py-1 text-xs font-bold rounded-full border outline-none bg-slate-50 dark:bg-slate-800 dark:text-white border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                    >
-                      <option value="Abierta">Abierta</option>
-                      <option value="Pausada">Pausada</option>
-                      <option value="Cerrada">Cerrada</option>
-                    </select>
-                  ) : (
-                    <span className="px-3 py-1 text-xs font-bold rounded-full border bg-slate-50 dark:bg-slate-800/50 dark:text-white border-slate-300 dark:border-slate-600 text-slate-600">
-                      Estatus: {selectedVacancy.status}
-                    </span>
-                  )}
-                </div>
+                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 mb-3 inline-block">Inst. {selectedVacancy.institutionId}</span>
                 <h2 className="text-2xl font-bold dark:text-white">{selectedVacancy.role}</h2>
                 <div className="flex items-center text-sm text-slate-500 mt-2 gap-4">
                   <span className="flex items-center gap-1"><Building className="w-4 h-4"/> {selectedVacancy.institutionName}</span>
                   <span className="flex items-center gap-1"><Clock className="w-4 h-4"/> {selectedVacancy.date}</span>
                 </div>
               </div>
-              <button type="button" onClick={() => setSelectedVacancy(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-4">
+                <select 
+                  value={selectedVacancy.status}
+                  onChange={(e) => handleUpdateVacancyStatus(selectedVacancy.id, e.target.value)}
+                  className={`text-sm px-3 py-1.5 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${selectedVacancy.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : selectedVacancy.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                >
+                  <option value="Abierta">Status: Abierta</option>
+                  <option value="Pausada">Status: Pausada</option>
+                  <option value="Cerrada">Status: Cerrada</option>
+                </select>
+                <button type="button" onClick={() => setSelectedVacancy(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-6">
+            <div className="p-6 overflow-y-auto space-y-4">
               {error && selectedVacancy && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">{error}</div>}
               {success && selectedVacancy && <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg text-sm border border-emerald-200">{success}</div>}
 
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-300 uppercase tracking-wider mb-2">Salario</h4>
-                <p className="text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">{selectedVacancy.salary || 'No especificado'}</p>
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-300 uppercase tracking-wider mb-2">Descripción</h4>
-                <div className="text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700/50 whitespace-pre-line">
-                  {selectedVacancy.description || 'Sin descripción detallada.'}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="col-span-2">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Rango Salarial</h4>
+                  <p className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-100 dark:border-slate-700 text-sm">{selectedVacancy.salary || 'No especificado'}</p>
+                </div>
+                <div className="col-span-2">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Modalidad</h4>
+                  <p className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-100 dark:border-slate-700 text-sm font-medium">{selectedVacancy.modality || 'Presencial'}</p>
+                </div>
+                <div className="col-span-2 md:col-span-4">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Ubicación Geográfica</h4>
+                  <p className="text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 p-2 rounded border border-slate-100 dark:border-slate-700 text-sm">{selectedVacancy.location || 'Sin definir'}</p>
                 </div>
               </div>
 
-              {/* Lista de CVs Vinculados a esta Vacante */}
-              <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Users className="w-5 h-5 text-blue-500" /> Candidatos Postulados</h4>
-                <div className="space-y-3">
-                  {allCvs.filter(c => (c.targetVacancyId?._id || c.targetVacancyId) === selectedVacancy.id).length === 0 ? (
-                    <p className="text-slate-500 text-sm italic bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-700">AÚN NO HAY CVs VINCULADOS A ESTA VACANTE</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="col-span-1 md:col-span-2">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Edad ideal</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-medium text-sm">{selectedVacancy.age || 'Indistinto'}</p>
+                </div>
+                <div className="col-span-1 md:col-span-2">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Sexo</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-medium text-sm">{selectedVacancy.gender || 'Indistinto'}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-4">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Habilidades (Skills)</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-medium text-sm">{selectedVacancy.skills || 'No especificado'}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic">Pruebas</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-bold text-sm">{selectedVacancy.knowledgeTest || 'N/A'}</p>
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic">Idioma</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-bold text-sm">{selectedVacancy.language || 'N/A'}</p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-slate-300 uppercase tracking-wider mb-2">Descripción de Actividades</h4>
+                <div className="text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 whitespace-pre-line text-sm">
+                  {selectedVacancy.activities || 'Sin actividades detalladas.'}
+                </div>
+              </div>
+              
+              {selectedVacancy.confidential && (
+                <div className="bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 p-3 rounded-lg border border-red-200 dark:border-red-800/50 text-sm font-bold text-center">
+                  ⚠️ ESTA VACANTE ES CONFIDENCIAL / PROHIBIDO PUBLICARLA AL EXTERIOR
+                </div>
+              )}
+
+              {/* CVS POSTULADOS */}
+              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden glass-panel">
+                <div className="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><Send className="w-5 h-5 text-indigo-500"/> Candidatos Postulados ({selectedVacancy.cvCount})</h3>
+                </div>
+                <div className="p-6 flex flex-col gap-3">
+                  {/* CONTRATADOS */}
+                  {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length > 0 && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 border-b border-emerald-100 dark:border-emerald-900/50 pb-2">Talento Contratado! 🎉</h4>
+                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').map(cv => (
+                        <div key={cv.id} className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex flex-col gap-2 mb-2">
+                          <div className="flex justify-between items-start">
+                            <div className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
+                              {cv.name}
+                              <select 
+                                value={cv.status} 
+                                onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
+                                className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-700 border-emerald-200"
+                              >
+                                <option value="Disponible">Disponible</option>
+                                <option value="En Proceso">En Proceso</option>
+                                <option value="Contratado">Contratado</option>
+                                <option value="Rechazado">Rechazar (Descartado)</option>
+                              </select>
+                            </div>
+                            <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:underline">
+                              <FileText className="w-4 h-4"/> Ver CV
+                            </a>
+                          </div>
+                          <div className="text-xs text-slate-500 font-medium">Inst. Origen: <span className="text-emerald-700 dark:text-emerald-400 font-bold">{cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ACTIVOS */}
+                  {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length === 0 && allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl">No hay candidatos postulados actualmente.</div>
                   ) : (
-                    allCvs.filter(c => (c.targetVacancyId?._id || c.targetVacancyId) === selectedVacancy.id).map(cv => (
-                      <div key={cv.id} className="flex justify-between items-center p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:border-blue-500 transition-colors">
+                   <div className="space-y-3">
+                    {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length > 0 && <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-slate-100 dark:border-slate-800 pb-2">Candidatos Activos</h4>}
+                    {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').map(cv => (
+                      <div key={cv.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between hover:border-blue-400 transition-colors shadow-sm">
                         <div>
                           <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             {cv.name}
-                            <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${cv.status === 'Rechazado' ? 'bg-red-100 text-red-700' : cv.status === 'Aprobado' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>{cv.status}</span>
+                            <select 
+                              value={cv.status} 
+                              onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
+                              className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity ${cv.status === 'Rechazado' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}
+                            >
+                              <option value="Disponible">Disponible</option>
+                              <option value="En Proceso">En Proceso</option>
+                              <option value="Contratado">Contratado</option>
+                              <option value="Rechazado">Rechazar (Descartado)</option>
+                            </select>
                           </div>
                           <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 font-medium">
-                            <span className="bg-slate-100 dark:bg-slate-900 px-2 py-1 rounded-md font-mono text-indigo-600 dark:text-indigo-400">Inst: {cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span>
-                            <span>| {cv.email}</span>
-                            <span>| Vinculado el: {new Date(cv.createdAt).toLocaleDateString()}</span>
+                            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md font-mono text-indigo-600 dark:text-indigo-400">Inst: {cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span>
                           </div>
                         </div>
-                        <a href={`${API_URL}!/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white dark:bg-blue-900/30 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition-colors"><FileText className="w-4 h-4"/> Ver PDF</a>
+                        <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-700 p-2 rounded-lg hover:bg-indigo-100 transition-colors ring-1 ring-inset ring-indigo-200">
+                          <FileText className="w-5 h-5"/>
+                        </a>
                       </div>
-                    ))
+                    ))}
+                   </div>
                   )}
                 </div>
               </div>
 
-              {/* Enviar CV a Vacante o Generar Tarea */}
-              {selectedVacancy.institutionId === user?.institutionId ? (
-              <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
-                <div className="mb-4">
-                  <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">Solicitar Candidato a la Red (SLA)</h4>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Genera un Trámite formal para que otra institución te envíe candidatos.</p>
-                </div>
-                <form onSubmit={handleRequestSla} className="space-y-4 bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo (A quién solicitar)</label>
-                      <input type="email" placeholder="gerente@institucion.com" value={requestSlaForm.targetEmail} onChange={e=>setRequestSlaForm({...requestSlaForm, targetEmail: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Fecha Límite (SLA)</label>
-                      <input type="date" value={requestSlaForm.dueDate} onChange={e=>setRequestSlaForm({...requestSlaForm, dueDate: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500" required />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mensaje Opcional</label>
-                    <textarea value={requestSlaForm.description} onChange={e=>setRequestSlaForm({...requestSlaForm, description: e.target.value})} rows="2" className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
-                  </div>
-                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl text-sm font-medium transition-all">Generar Trámite SLA</button>
-                </form>
-              </div>
-              ) : (
+              {/* Enviar CV a Vacante */}
               <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
                 <div className="mb-4">
                   <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
@@ -352,7 +561,47 @@ const Vacantes = () => {
                   </button>
                 </form>
               </div>
+
+              {/* Solicitar CV a Otra Institución */}
+              {selectedVacancy.institutionId === user?.institutionId && (
+                <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                  <div className="mb-4">
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-white">Solicitar CV a Otra Institución</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Pide directamente a una institución de la red que revise su base de datos y aporte CVs.</p>
+                  </div>
+                  
+                  <form onSubmit={handleRequestCv} className="space-y-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Institución Destino</label>
+                      <select 
+                        value={requestCvForm.targetInstitutionId} 
+                        onChange={e=>setRequestCvForm({...requestCvForm, targetInstitutionId: e.target.value})} 
+                        className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                        required
+                      >
+                        <option value="">-- Selecciona Institución --</option>
+                        {institutions.filter(i => i.id !== user?.institutionId).map(inst => (
+                          <option key={inst.id} value={inst.id}>{inst.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mensaje Opcional</label>
+                      <textarea 
+                        value={requestCvForm.description} 
+                        onChange={e=>setRequestCvForm({...requestCvForm, description: e.target.value})} 
+                        placeholder={`Ej. Estamos buscando perfiles para ${selectedVacancy.role}...`}
+                        className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none" 
+                        rows="2"
+                      ></textarea>
+                    </div>
+                    <button type="submit" disabled={!user?.institutionId} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 transition-all">
+                      Enviar Solicitud
+                    </button>
+                  </form>
+                </div>
               )}
+
             </div>
            </div>
         </div>

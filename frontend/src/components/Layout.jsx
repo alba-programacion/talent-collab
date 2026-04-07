@@ -37,19 +37,7 @@ const Layout = ({ children }) => {
             </p>
           </div>
           
-          {/* Profile Progress Bar */}
-          <div className="mt-5 text-left bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-            <div className="flex justify-between items-center mb-1">
-              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300">Completitud del Perfil</span>
-              <span className="text-[11px] font-black text-blue-600 dark:text-blue-400">70%</span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-1">
-              <div className="bg-gradient-to-r from-blue-500 to-indigo-500 h-1.5 rounded-full" style={{ width: '70%' }}></div>
-            </div>
-            <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-2 font-medium leading-tight">
-              Añade más información a tu perfil para llegar al 100%.
-            </p>
-          </div>
+
         </div>
         
         <nav className="flex-1 px-4 py-6 space-y-2">

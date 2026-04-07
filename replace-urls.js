@@ -22,8 +22,6 @@ function processDir(dir) {
         // Replace literal string concat
         content = content.replace(/'http:\/\/localhost:5000/g, 'API_URL + \'');
         // Replace inside template literals
-        content = content.replace(/`http:\/\/localhost:5000/g, '`${API_URL}!'); // wait! `${API_URL}${ ... }` NO, it will be `${API_URL}/api/...`
-        // Actually better to replace `http://localhost:5000` with `${API_URL}` inside an existing template literal
         content = content.replace(/`http:\/\/localhost:5000/g, '`${API_URL}');
         
         fs.writeFileSync(fullPath, content);

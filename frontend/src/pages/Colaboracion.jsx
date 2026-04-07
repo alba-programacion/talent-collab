@@ -1,4 +1,3 @@
-import { API_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { Send, Inbox, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
@@ -15,7 +14,7 @@ const Colaboracion = () => {
   const [rejectReason, setRejectReason] = useState('');
   
   // For sending SLA
-  const [applyForm, setApplyForm] = useState({ name: '', email: '', description: '', targetEmail: '', dueDate: '' });
+  const [applyForm, setApplyForm] = useState({ name: '', description: '', targetEmail: '', dueDate: '' });
   const [documentFile, setDocumentFile] = useState(null);
   const [collabError, setCollabError] = useState('');
   const [collabSuccess, setCollabSuccess] = useState('');
@@ -23,8 +22,8 @@ const Colaboracion = () => {
   const fetchData = async () => {
     try {
       const [cvsRes, instRes] = await Promise.all([
-        fetch(API_URL + '/api/cvs'),
-        fetch(API_URL + '/api/institutions')
+        fetch('http://localhost:5000/api/cvs'),
+        fetch('http://localhost:5000/api/institutions')
       ]);
       setCvs(await cvsRes.json());
       setInstitutions(await instRes.json());
@@ -46,7 +45,7 @@ const Colaboracion = () => {
   const handleStatusChange = async (cvId, newStatus) => {
     if (newStatus === 'Rechazado' && !rejectReason) return;
     try {
-      await fetch(`${API_URL}!/api/cvs/${cvId}/status`, {
+      await fetch(`http://localhost:5000/api/cvs/${cvId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus, rejectedReason: rejectReason })
@@ -64,7 +63,6 @@ const Colaboracion = () => {
     
     const formData = new FormData();
     formData.append('name', applyForm.name);
-    formData.append('email', applyForm.email);
     formData.append('description', applyForm.description);
     formData.append('targetEmail', applyForm.targetEmail);
     formData.append('dueDate', applyForm.dueDate);
@@ -73,7 +71,7 @@ const Colaboracion = () => {
     formData.append('document', documentFile);
 
     try {
-      const res = await fetch(API_URL + '/api/cvs/collab', {
+      const res = await fetch('http://localhost:5000/api/cvs/collab', {
         method: 'POST',
         body: formData
       });
@@ -81,7 +79,7 @@ const Colaboracion = () => {
       if (!res.ok) throw new Error(data.error || 'Error al enviar CV');
       
       setCollabSuccess('¡CV enviado! Tarea SLA asignada al correo destino.');
-      setApplyForm({ name: '', email: '', description: '', targetEmail: '', dueDate: '' });
+      setApplyForm({ name: '', description: '', targetEmail: '', dueDate: '' });
       setDocumentFile(null);
       const fileInput = document.getElementById('collab-file');
       if (fileInput) fileInput.value = '';
@@ -128,7 +126,7 @@ const Colaboracion = () => {
               ) : incomingCvs.map(cv => (
                 <div key={cv.id} className="p-4 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md hover:border-blue-500/30">
                   <div className="flex-1">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">{cv.name} <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded-md">Origen: Inst. {cv.sourceInstitutionId}</span></h4>
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">{cv.name} <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded-md">Origen: Inst. {cv.sourceInstitutionName || (typeof cv.sourceInstitutionId === 'string' ? cv.sourceInstitutionId : cv.sourceInstitutionId?._id)}</span></h4>
                     <p className="text-sm text-slate-500">Documento: {cv.document}</p>
                     <div className="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded w-fit">
                       <AlertCircle className="w-3 h-3" /> Tienes hasta el {cv.collaborationDeadline} para contestar, sino el estatus se cierra automáticamente.
@@ -179,10 +177,6 @@ const Colaboracion = () => {
                       <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Nombre del Candidato</label>
                       <input type="text" value={applyForm.name} onChange={e=>setApplyForm({...applyForm, name: e.target.value})} className="w-full px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
                     </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo C.</label>
-                      <input type="email" value={applyForm.email} onChange={e=>setApplyForm({...applyForm, email: e.target.value})} className="w-full px-4 py-2 rounded-xl border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
-                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -207,8 +201,30 @@ const Colaboracion = () => {
                       <Send className="w-5 h-5"/> {user?.institutionId ? 'Enviar y Generar Trámite' : 'Envío Bloqueado (Sin Institución)'}
                     </button>
                   </div>
-                </form>
+                 </form>
               </div>
+
+              {mySentCvs.length > 0 && (
+                <div className="bg-white/50 dark:bg-slate-800/20 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 mt-6">
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Historial de CVs Enviados</h3>
+                  <div className="space-y-4">
+                    {mySentCvs.map(cv => (
+                      <div key={cv.id} className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-blue-400 transition-colors">
+                        <div>
+                          <h4 className="font-bold text-slate-900 dark:text-white mb-1 flex items-center gap-2">
+                             {cv.name} 
+                             <span className={`px-2 py-0.5 text-[10px] uppercase font-black tracking-wider rounded-md ${cv.status === 'Rechazado' ? 'bg-red-100 text-red-700' : cv.status === 'Aprobado' || cv.status === 'Contratado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{cv.status}</span>
+                          </h4>
+                          <p className="text-sm text-slate-500 flex items-center gap-1">
+                            Enviado para cubrir vacante externa en <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded ml-1">Inst. {cv.targetInstitutionId}</span> ({cv.targetVacancyId?.role || 'Puesto no especificado'}).
+                          </p>
+                        </div>
+                        <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 flex items-center gap-2 shrink-0"><FileText className="w-4 h-4"/> Ver Archivo</a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

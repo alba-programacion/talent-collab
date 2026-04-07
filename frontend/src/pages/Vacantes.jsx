@@ -17,6 +17,7 @@ const Vacantes = () => {
   // Forms state
   const [form, setForm] = useState({ role: '', salary: '', description: '', institutionId: '' });
   const [applyForm, setApplyForm] = useState({ name: '', email: '' });
+  const [requestSlaForm, setRequestSlaForm] = useState({ targetEmail: '', description: '', dueDate: '' });
   const [documentFile, setDocumentFile] = useState(null);
   
   // Messages
@@ -228,7 +229,24 @@ const Vacantes = () => {
            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden glass-panel flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start p-6 border-b border-slate-200 dark:border-slate-800 relative">
               <div>
-                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 mb-3 inline-block">Inst. {selectedVacancy.institutionId}</span>
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 inline-block">Inst. {selectedVacancy.institutionId}</span>
+                  {selectedVacancy.institutionId === user?.institutionId ? (
+                    <select 
+                      value={selectedVacancy.status} 
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                      className="px-2 py-1 text-xs font-bold rounded-full border outline-none bg-slate-50 dark:bg-slate-800 dark:text-white border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value="Abierta">Abierta</option>
+                      <option value="Pausada">Pausada</option>
+                      <option value="Cerrada">Cerrada</option>
+                    </select>
+                  ) : (
+                    <span className="px-3 py-1 text-xs font-bold rounded-full border bg-slate-50 dark:bg-slate-800/50 dark:text-white border-slate-300 dark:border-slate-600 text-slate-600">
+                      Estatus: {selectedVacancy.status}
+                    </span>
+                  )}
+                </div>
                 <h2 className="text-2xl font-bold dark:text-white">{selectedVacancy.role}</h2>
                 <div className="flex items-center text-sm text-slate-500 mt-2 gap-4">
                   <span className="flex items-center gap-1"><Building className="w-4 h-4"/> {selectedVacancy.institutionName}</span>
@@ -282,7 +300,32 @@ const Vacantes = () => {
                 </div>
               </div>
 
-              {/* Enviar CV a Vacante */}
+              {/* Enviar CV a Vacante o Generar Tarea */}
+              {selectedVacancy.institutionId === user?.institutionId ? (
+              <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                <div className="mb-4">
+                  <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">Solicitar Candidato a la Red (SLA)</h4>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">Genera un Trámite formal para que otra institución te envíe candidatos.</p>
+                </div>
+                <form onSubmit={handleRequestSla} className="space-y-4 bg-indigo-50/50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-200 dark:border-indigo-800/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Correo (A quién solicitar)</label>
+                      <input type="email" placeholder="gerente@institucion.com" value={requestSlaForm.targetEmail} onChange={e=>setRequestSlaForm({...requestSlaForm, targetEmail: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-red-600 dark:text-red-400 mb-1">Fecha Límite (SLA)</label>
+                      <input type="date" value={requestSlaForm.dueDate} onChange={e=>setRequestSlaForm({...requestSlaForm, dueDate: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500" required />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Mensaje Opcional</label>
+                    <textarea value={requestSlaForm.description} onChange={e=>setRequestSlaForm({...requestSlaForm, description: e.target.value})} rows="2" className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
+                  </div>
+                  <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl text-sm font-medium transition-all">Generar Trámite SLA</button>
+                </form>
+              </div>
+              ) : (
               <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
                 <div className="mb-4">
                   <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
@@ -309,6 +352,7 @@ const Vacantes = () => {
                   </button>
                 </form>
               </div>
+              )}
             </div>
            </div>
         </div>

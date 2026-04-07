@@ -151,6 +151,31 @@ app.post('/api/vacancies', async (req, res) => {
   } catch(e) { res.status(400).json({error: e.message}); }
 });
 
+app.patch('/api/vacancies/:id/status', async (req, res) => {
+  try {
+    const v = await Vacancy.findById(req.params.id);
+    v.status = req.body.status;
+    await v.save();
+    res.json(v);
+  } catch(e) { res.status(400).json({error: e.message}); }
+});
+
+app.post('/api/tasks/request-cv', async (req, res) => {
+  try {
+    const { targetEmail, description, dueDate, targetVacancyId, senderEmail } = req.body;
+    const finalDueDate = dueDate ? new Date(dueDate) : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const task = await Task.create({
+      type: 'REQUEST_CV',
+      senderEmail,
+      targetEmail,
+      targetVacancyId,
+      description: description || 'Se requiere candidato para esta vacante.',
+      dueDate: finalDueDate
+    });
+    res.status(201).json(task);
+  } catch(e) { res.status(400).json({error: e.message}); }
+});
+
 app.get('/api/cvs', async (req, res) => {
   const cvs = await CV.find().populate('sourceInstitutionId').populate('targetVacancyId');
   res.json(cvs.map(c => ({

@@ -16,8 +16,8 @@ const CVs = () => {
     try {
       const res = await fetch(API_URL + '/api/cvs');
       const data = await res.json();
-      // Only view those created by our institution, as requested in MVP
-      setCvs(data.filter(c => (c.sourceInstitutionId?._id || c.sourceInstitutionId) === user.institutionId));
+      // View all CVs
+      setCvs(data);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 

@@ -10,8 +10,8 @@ const Register = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [institutionId, setInstitutionId] = useState('');
-  const [newInstitutionName, setNewInstitutionName] = useState('');
-  const [newInstitutionProfile, setNewInstitutionProfile] = useState('');
+  const [newInstName, setNewInstName] = useState('');
+  const [newInstProfile, setNewInstProfile] = useState('');
   const [institutions, setInstitutions] = useState([]);
 
   useEffect(() => {
@@ -27,20 +27,16 @@ const Register = () => {
     setLoading(true);
 
     try {
-      if (!institutionId) {
+      if (!institutionId && !newInstName) {
         setLoading(false);
-        return setError('Selecciona o crea una institución aportadora.');
-      }
-      if (institutionId === 'NEW' && (!newInstitutionName || !newInstitutionProfile)) {
-        setLoading(false);
-        return setError('Ingresa el nombre y el tipo de la nueva institución.');
+        return setError('Selecciona una institución existente o ingresa el nombre de una nueva.');
       }
       
       const payload = {
         name, email, password, role,
-        institutionId: institutionId === 'NEW' ? null : institutionId,
-        newInstitutionName: institutionId === 'NEW' ? newInstitutionName : undefined,
-        newInstitutionProfile: institutionId === 'NEW' ? newInstitutionProfile : undefined
+        institutionId: institutionId === 'NEW' ? '' : institutionId,
+        newInstitutionName: institutionId === 'NEW' ? newInstName : '',
+        newInstitutionProfile: institutionId === 'NEW' ? newInstProfile : ''
       };
 
       const res = await fetch('http://localhost:5000/api/auth/register', {
@@ -114,7 +110,6 @@ const Register = () => {
               value={role} 
               onChange={e => {
                 setRole(e.target.value);
-                if (e.target.value === 'user' && institutionId === 'NEW') setInstitutionId('');
               }}
               className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
             >
@@ -134,42 +129,37 @@ const Register = () => {
                 className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
               >
                 <option value="">-- Selecciona una Institución --</option>
-                {['admin', 'management'].includes(role) && (
-                  <option value="NEW" className="font-bold text-indigo-600">➕ Crear Nueva Institución</option>
-                )}
                 {institutions.map(inst => (
                   <option key={inst.id} value={inst.id}>{inst.name} ({inst.profile})</option>
                 ))}
+                <option value="NEW" className="font-bold text-blue-600">+ Registrar Nueva Institución...</option>
               </select>
             </div>
 
-            {institutionId === 'NEW' && ['admin', 'management'].includes(role) && (
-              <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50 animate-fade-in space-y-3">
+            {institutionId === 'NEW' && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl space-y-4 border border-blue-100 dark:border-blue-800 animate-fade-in">
+                <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Datos de la Nueva Entidad</p>
                 <div>
-                  <label className="block text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-1">Nombre Oficial</label>
-                  <input 
-                    type="text" 
-                    value={newInstitutionName}
-                    onChange={(e) => setNewInstitutionName(e.target.value)}
-                    placeholder="Ej. Banco Nacional"
-                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white"
-                    required
-                  />
+                   <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Oficial</label>
+                   <input 
+                     type="text" 
+                     value={newInstName} 
+                     onChange={e => setNewInstName(e.target.value)} 
+                     placeholder="Ej. Institución de Innovación"
+                     className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                     required={institutionId === 'NEW'}
+                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-indigo-700 dark:text-indigo-400 mb-1">Giro / Tipo de Institución</label>
-                  <select 
-                    value={newInstitutionProfile}
-                    onChange={(e) => setNewInstitutionProfile(e.target.value)}
-                    className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none dark:text-white"
-                    required
-                  >
-                    <option value="">Seleccionar Giro</option>
-                    <option value="Banco">Banco</option>
-                    <option value="Casa de Bolsa">Casa de Bolsa</option>
-                    <option value="Universidad">Universidad / Academia</option>
-                    <option value="Empresa Privada">Empresa Privada</option>
-                  </select>
+                   <label className="block text-xs font-bold text-slate-500 mb-1">Giro / Perfil de Negocio</label>
+                   <input 
+                     type="text" 
+                     value={newInstProfile} 
+                     onChange={e => setNewInstProfile(e.target.value)} 
+                     placeholder="Ej. Desarrollo Tecnológico, Salud, etc."
+                     className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                     required={institutionId === 'NEW'}
+                   />
                 </div>
               </div>
             )}

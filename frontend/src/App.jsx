@@ -56,9 +56,10 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, adminOnly = false }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
+  if (adminOnly && user.role !== 'admin') return <Navigate to="/vacantes" replace />;
   return <Layout>{children}</Layout>;
 };
 
@@ -69,8 +70,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute adminOnly={true}><Dashboard /></ProtectedRoute>} />
+          <Route path="/dashboard" element={<ProtectedRoute adminOnly={true}><Dashboard /></ProtectedRoute>} />
           <Route path="/vacantes" element={<ProtectedRoute><Vacantes /></ProtectedRoute>} />
           <Route path="/colaboracion" element={<ProtectedRoute><Colaboracion /></ProtectedRoute>} />
           <Route path="/cvs" element={<ProtectedRoute><CVs /></ProtectedRoute>} />

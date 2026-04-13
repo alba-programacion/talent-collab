@@ -20,7 +20,7 @@ const Vacantes = () => {
     age: '', gender: 'Indistinto', skills: '', institutionId: ''
   });
   const [applyForm, setApplyForm] = useState({ name: '', email: '' });
-  const [requestCvForm, setRequestCvForm] = useState({ targetInstitutionId: '', description: '' });
+  const [requestCvForm, setRequestCvForm] = useState({ targetInstitutionId: '', description: '', dueDate: '' });
   const [documentFile, setDocumentFile] = useState(null);
   
   // Messages
@@ -169,6 +169,16 @@ const Vacantes = () => {
     } catch(err) { alert(err.message) }
   };
 
+  const handleDeleteVacancy = async (vacancyId) => {
+    if (!window.confirm("¿Estás seguro de que deseas eliminar esta vacante de forma permanente?")) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/vacancies/${vacancyId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar');
+      fetchVacancies();
+      if (selectedVacancy && selectedVacancy.id === vacancyId) setSelectedVacancy(null);
+    } catch(err) { alert(err.message) }
+  };
+
   const handleRequestCv = async (e) => {
     e.preventDefault();
     setError(''); setSuccess('');
@@ -182,7 +192,8 @@ const Vacantes = () => {
           targetVacancyId: selectedVacancy.id,
           senderEmail: user.email,
           targetInstitutionId: requestCvForm.targetInstitutionId,
-          description: requestCvForm.description || `Por favor buscamos candidatos para: ${selectedVacancy.role}`
+          description: requestCvForm.description || `Por favor buscamos candidatos para: ${selectedVacancy.role}`,
+          dueDate: requestCvForm.dueDate
         })
       });
       const data = await res.json();
@@ -216,7 +227,7 @@ const Vacantes = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Red de Vacantes</h1>
           <p className="text-slate-500 dark:text-slate-400">Explora las posiciones abiertas en las instituciones asociadas.</p>
         </div>
-        {(user?.role === 'management' || user?.role === 'admin') && (
+        {(user?.role === 'user' || user?.role === 'management' || user?.role === 'admin') && (
           <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
             <Plus className="w-5 h-5" /> Nueva Vacante
           </button>
@@ -273,8 +284,8 @@ const Vacantes = () => {
 
       {/* Add Vacancy Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden glass-panel">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-sm p-4 pt-10 animate-fade-in" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden glass-panel" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center p-6 border-b border-slate-200 dark:border-slate-800">
               <h2 className="text-xl font-bold dark:text-white">Publicar Nueva Vacante</h2>
               <button type="button" onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
@@ -376,10 +387,11 @@ const Vacantes = () => {
 
       {/* Expanded Vacancy Detail Modal */}
       {selectedVacancy && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setSelectedVacancy(null)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-sm p-4 pt-10 animate-fade-in" onClick={() => setSelectedVacancy(null)}>
            {/* Stop propagation to avoid closing modal when clicking inside it */}
            <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden glass-panel flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start p-6 border-b border-slate-200 dark:border-slate-800 relative">
+               <button onClick={() => setSelectedVacancy(null)} className="absolute top-4 right-4 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-all z-10"><X className="w-5 h-5"/></button>
               <div>
                 <span className="px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 mb-3 inline-block">Inst. {selectedVacancy.institutionId}</span>
                 <h2 className="text-2xl font-bold dark:text-white">{selectedVacancy.role}</h2>
@@ -389,22 +401,26 @@ const Vacantes = () => {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <select 
-                  value={selectedVacancy.status}
-                  onChange={(e) => handleUpdateVacancyStatus(selectedVacancy.id, e.target.value)}
-                  className={`text-sm px-3 py-1.5 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${selectedVacancy.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : selectedVacancy.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
-                >
-                  <option value="Abierta">Status: Abierta</option>
-                  <option value="Pausada">Status: Pausada</option>
-                  <option value="Cerrada">Status: Cerrada</option>
-                </select>
-                <button type="button" onClick={() => setSelectedVacancy(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
+                {user?.role === 'admin' && (
+                  <button onClick={() => handleDeleteVacancy(selectedVacancy.id)} className="text-sm px-3 py-1.5 rounded-lg font-bold border outline-none cursor-pointer transition-colors bg-red-100 text-red-700 border-red-200 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700">
+                    Eliminar
+                  </button>
+                )}
+                {user?.role !== 'user' && (
+                  <select 
+                    value={selectedVacancy.status}
+                    onChange={(e) => handleUpdateVacancyStatus(selectedVacancy.id, e.target.value)}
+                    className={`text-sm px-3 py-1.5 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${selectedVacancy.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : selectedVacancy.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                  >
+                    <option value="Abierta">Status: Abierta</option>
+                    <option value="Pausada">Status: Pausada</option>
+                    <option value="Cerrada">Status: Cerrada</option>
+                  </select>
+                )}
               </div>
             </div>
             
-            <div className="p-6 overflow-y-auto space-y-4">
+            <div className="p-6 overflow-y-auto space-y-6">
               {error && selectedVacancy && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">{error}</div>}
               {success && selectedVacancy && <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg text-sm border border-emerald-200">{success}</div>}
 
@@ -438,14 +454,14 @@ const Vacantes = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic">Pruebas</h4>
-                  <p className="text-slate-800 dark:text-slate-200 font-bold text-sm">{selectedVacancy.knowledgeTest || 'N/A'}</p>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Examen / Prueba Conocimientos</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-medium text-sm">{selectedVacancy.knowledgeTest || 'No'}</p>
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic">Idioma</h4>
-                  <p className="text-slate-800 dark:text-slate-200 font-bold text-sm">{selectedVacancy.language || 'N/A'}</p>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Dominio de Idioma</h4>
+                  <p className="text-slate-800 dark:text-slate-200 font-medium text-sm">{selectedVacancy.language || 'No requerido'}</p>
                 </div>
               </div>
 
@@ -462,144 +478,160 @@ const Vacantes = () => {
                 </div>
               )}
 
-              {/* CVS POSTULADOS */}
-              <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden glass-panel">
-                <div className="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-                  <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><Send className="w-5 h-5 text-indigo-500"/> Candidatos Postulados ({selectedVacancy.cvCount})</h3>
-                </div>
-                <div className="p-6 flex flex-col gap-3">
-                  {/* CONTRATADOS */}
-                  {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length > 0 && (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 border-b border-emerald-100 dark:border-emerald-900/50 pb-2">Talento Contratado! 🎉</h4>
-                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').map(cv => (
-                        <div key={cv.id} className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex flex-col gap-2 mb-2">
-                          <div className="flex justify-between items-start">
-                            <div className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
-                              {cv.name}
-                              <select 
-                                value={cv.status} 
-                                onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
-                                className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-700 border-emerald-200"
-                              >
-                                <option value="Disponible">Disponible</option>
-                                <option value="En Proceso">En Proceso</option>
-                                <option value="Contratado">Contratado</option>
-                                <option value="Rechazado">Rechazar (Descartado)</option>
-                              </select>
+              {/* CVS POSTULADOS - Restricted for user role */}
+              {user?.role !== 'user' && (
+                <>
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden glass-panel">
+                    <div className="bg-slate-50 dark:bg-slate-800/80 px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                      <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><Send className="w-5 h-5 text-indigo-500"/> Candidatos Postulados ({selectedVacancy.cvCount})</h3>
+                    </div>
+                    <div className="p-6 flex flex-col gap-3">
+                      {/* CONTRATADOS */}
+                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 border-b border-emerald-100 dark:border-emerald-900/50 pb-2">Talento Contratado! 🎉</h4>
+                          {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').map(cv => (
+                            <div key={cv.id} className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex flex-col gap-2 mb-2">
+                              <div className="flex justify-between items-start">
+                                <div className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
+                                  {cv.name}
+                                  <select 
+                                    value={cv.status} 
+                                    onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
+                                    className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-700 border-emerald-200"
+                                  >
+                                    <option value="Disponible">Disponible</option>
+                                    <option value="En Proceso">En Proceso</option>
+                                    <option value="Contratado">Contratado</option>
+                                  </select>
+                                </div>
+                                <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:underline">
+                                  <FileText className="w-4 h-4"/> Ver CV
+                                </a>
+                              </div>
+                              <div className="text-xs text-slate-500 font-medium flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 mt-2">
+                                <span>Inst. Origen: <span className="text-emerald-700 dark:text-emerald-400 font-bold">{cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span></span>
+                                <span className="text-slate-400">Publicado: {new Date(cv.createdAt).toLocaleDateString()}</span>
+                              </div>
                             </div>
-                            <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:underline">
-                              <FileText className="w-4 h-4"/> Ver CV
+                          ))}
+                        </div>
+                      )}
+
+                      {/* ACTIVOS */}
+                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length === 0 && allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length === 0 ? (
+                        <div className="text-center py-6 text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl">No hay candidatos postulados currently.</div>
+                      ) : (
+                      <div className="space-y-3">
+                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length > 0 && <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-slate-100 dark:border-slate-800 pb-2">Candidatos Activos</h4>}
+                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').map(cv => (
+                          <div key={cv.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between hover:border-blue-400 transition-colors shadow-sm">
+                            <div>
+                              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                {cv.name}
+                                <select 
+                                  value={cv.status} 
+                                  onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
+                                  className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-indigo-100 text-indigo-700 border-indigo-200`}
+                                >
+                                  <option value="Disponible">Disponible</option>
+                                  <option value="En Proceso">En Proceso</option>
+                                  <option value="Contratado">Contratado</option>
+                                </select>
+                              </div>
+                              <div className="text-xs text-slate-500 mt-2 flex flex-col sm:flex-row sm:items-center gap-2 font-medium">
+                                <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md font-mono text-indigo-600 dark:text-indigo-400">Inst: {cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span>
+                                <span className="text-slate-400">Publicado: {new Date(cv.createdAt).toLocaleDateString()}</span>
+                              </div>
+                            </div>
+                            <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-700 p-2 rounded-lg hover:bg-indigo-100 transition-colors ring-1 ring-inset ring-indigo-200">
+                              <FileText className="w-5 h-5"/>
                             </a>
                           </div>
-                          <div className="text-xs text-slate-500 font-medium">Inst. Origen: <span className="text-emerald-700 dark:text-emerald-400 font-bold">{cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span></div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* ACTIVOS */}
-                  {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length === 0 && allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length === 0 ? (
-                    <div className="text-center py-6 text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl">No hay candidatos postulados actualmente.</div>
-                  ) : (
-                   <div className="space-y-3">
-                    {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length > 0 && <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-slate-100 dark:border-slate-800 pb-2">Candidatos Activos</h4>}
-                    {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').map(cv => (
-                      <div key={cv.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between hover:border-blue-400 transition-colors shadow-sm">
-                        <div>
-                          <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                            {cv.name}
-                            <select 
-                              value={cv.status} 
-                              onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
-                              className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity ${cv.status === 'Rechazado' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}
-                            >
-                              <option value="Disponible">Disponible</option>
-                              <option value="En Proceso">En Proceso</option>
-                              <option value="Contratado">Contratado</option>
-                              <option value="Rechazado">Rechazar (Descartado)</option>
-                            </select>
-                          </div>
-                          <div className="text-xs text-slate-500 mt-1 flex items-center gap-2 font-medium">
-                            <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md font-mono text-indigo-600 dark:text-indigo-400">Inst: {cv.sourceInstitutionName || cv.sourceInstitutionId || 'Directa'}</span>
-                          </div>
-                        </div>
-                        <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-700 p-2 rounded-lg hover:bg-indigo-100 transition-colors ring-1 ring-inset ring-indigo-200">
-                          <FileText className="w-5 h-5"/>
-                        </a>
-                      </div>
-                    ))}
-                   </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Enviar CV a Vacante */}
-              <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
-                <div className="mb-4">
-                  <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">Sube el CV directamente a esta vacante para que la institución pueda revisarlo en su base de datos.</p>
-                </div>
-                
-                <form onSubmit={handleApplyCv} className="space-y-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nombre del Candidato</label>
-                      <input type="text" value={applyForm.name} onChange={e=>setApplyForm({...applyForm, name: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Correo C.</label>
-                      <input type="email" value={applyForm.email} onChange={e=>setApplyForm({...applyForm, email: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Archivo CV (PDF/Word)</label>
-                    <input type="file" onChange={e=>setDocumentFile(e.target.files[0])} accept=".pdf,.doc,.docx" className="w-full px-3 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 dark:text-white transition-colors cursor-pointer" required />
-                  </div>
-                  <button type="submit" disabled={!user?.institutionId} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all">
-                    {user?.institutionId ? 'Subir y Postular Candidato' : 'Bloqueado: Requiere Institución Aportadora'}
-                  </button>
-                </form>
-              </div>
-
-              {/* Solicitar CV a Otra Institución */}
-              {selectedVacancy.institutionId === user?.institutionId && (
-                <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
-                  <div className="mb-4">
-                    <h4 className="text-lg font-bold text-slate-900 dark:text-white">Solicitar CV a Otra Institución</h4>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Pide directamente a una institución de la red que revise su base de datos y aporte CVs.</p>
-                  </div>
-                  
-                  <form onSubmit={handleRequestCv} className="space-y-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Institución Destino</label>
-                      <select 
-                        value={requestCvForm.targetInstitutionId} 
-                        onChange={e=>setRequestCvForm({...requestCvForm, targetInstitutionId: e.target.value})} 
-                        className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                        required
-                      >
-                        <option value="">-- Selecciona Institución --</option>
-                        {institutions.filter(i => i.id !== user?.institutionId).map(inst => (
-                          <option key={inst.id} value={inst.id}>{inst.name}</option>
                         ))}
-                      </select>
+                      </div>
+                      )}
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mensaje Opcional</label>
-                      <textarea 
-                        value={requestCvForm.description} 
-                        onChange={e=>setRequestCvForm({...requestCvForm, description: e.target.value})} 
-                        placeholder={`Ej. Estamos buscando perfiles para ${selectedVacancy.role}...`}
-                        className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none" 
-                        rows="2"
-                      ></textarea>
+                  </div>
+
+                  {/* Enviar CV a Vacante */}
+                  <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                    <div className="mb-4">
+                      <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
+                      <p className="text-sm text-slate-500 dark:text-slate-400">Sube el CV directamente a esta vacante para que la institución pueda revisarlo en su base de datos.</p>
                     </div>
-                    <button type="submit" disabled={!user?.institutionId} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 transition-all">
-                      Enviar Solicitud
-                    </button>
-                  </form>
-                </div>
+                    
+                    <form onSubmit={handleApplyCv} className="space-y-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nombre del Candidato</label>
+                          <input type="text" value={applyForm.name} onChange={e=>setApplyForm({...applyForm, name: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Correo C.</label>
+                          <input type="email" value={applyForm.email} onChange={e=>setApplyForm({...applyForm, email: e.target.value})} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Archivo CV (PDF/Word)</label>
+                        <input type="file" onChange={e=>setDocumentFile(e.target.files[0])} accept=".pdf,.doc,.docx" className="w-full px-3 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 dark:text-white transition-colors cursor-pointer" required />
+                      </div>
+                      <button type="submit" disabled={!user?.institutionId} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all">
+                        {user?.institutionId ? 'Subir y Postular Candidato' : 'Bloqueado: Requiere Institución Aportadora'}
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Solicitar CV a Otra Institución */}
+                  {selectedVacancy.institutionId === user?.institutionId && (
+                    <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                      <div className="mb-4">
+                        <h4 className="text-lg font-bold text-slate-900 dark:text-white">Solicitar CV a Otra Institución</h4>
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Pide directamente a una institución de la red que revise su base de datos y aporte CVs.</p>
+                      </div>
+                      
+                      <form onSubmit={handleRequestCv} className="space-y-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Institución Destino</label>
+                          <select 
+                            value={requestCvForm.targetInstitutionId} 
+                            onChange={e=>setRequestCvForm({...requestCvForm, targetInstitutionId: e.target.value})} 
+                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                            required
+                          >
+                            <option value="">-- Selecciona Institución --</option>
+                            {institutions.filter(i => i.id !== user?.institutionId).map(inst => (
+                              <option key={inst.id} value={inst.id}>{inst.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Acordar Fecha Límite (SLA)</label>
+                          <input 
+                            type="date" 
+                            value={requestCvForm.dueDate} 
+                            onChange={e=>setRequestCvForm({...requestCvForm, dueDate: e.target.value})} 
+                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500" 
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mensaje Opcional</label>
+                          <textarea 
+                            value={requestCvForm.description} 
+                            onChange={e=>setRequestCvForm({...requestCvForm, description: e.target.value})} 
+                            placeholder={`Ej. Estamos buscando perfiles para ${selectedVacancy.role}...`}
+                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none" 
+                            rows="2"
+                          ></textarea>
+                        </div>
+                        <button type="submit" disabled={!user?.institutionId} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 transition-all">
+                          Enviar Solicitud
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </>
               )}
 
             </div>

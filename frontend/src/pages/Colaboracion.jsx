@@ -1,32 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
-import { Send, Inbox, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Send, Inbox, AlertCircle, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 const Colaboracion = () => {
   const { user } = useAuth();
   const [cvs, setCvs] = useState([]);
   const [institutions, setInstitutions] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('recibidos');
-  
-  // For rejecting
-  const [rejectingId, setRejectingId] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
   
   // For sending SLA
   const [applyForm, setApplyForm] = useState({ name: '', description: '', targetEmail: '', dueDate: '' });
   const [documentFile, setDocumentFile] = useState(null);
   const [collabError, setCollabError] = useState('');
   const [collabSuccess, setCollabSuccess] = useState('');
+  
+  const getInstName = (id) => {
+    if (!id) return null;
+    const inst = institutions.find(i => i.id === id || i._id === id);
+    return inst ? inst.name : id;
+  };
 
   const fetchData = async () => {
     try {
-      const [cvsRes, instRes] = await Promise.all([
+      const [cvsRes, instRes, tasksRes] = await Promise.all([
         fetch('http://localhost:5000/api/cvs'),
-        fetch('http://localhost:5000/api/institutions')
+        fetch('http://localhost:5000/api/institutions'),
+        fetch(`http://localhost:5000/api/tasks?email=${user.email}`)
       ]);
       setCvs(await cvsRes.json());
       setInstitutions(await instRes.json());
+      setTasks(await tasksRes.json());
     } catch (e) {
       console.error(e);
     } finally {
@@ -41,20 +46,6 @@ const Colaboracion = () => {
   // CVs enviados por mi institución que están en proceso o disponibles para ser enviados
   const myAvailableCvs = cvs.filter(c => c.sourceInstitutionId === user.institutionId && c.status === 'Disponible');
   const mySentCvs = cvs.filter(c => c.sourceInstitutionId === user.institutionId && c.targetInstitutionId);
-
-  const handleStatusChange = async (cvId, newStatus) => {
-    if (newStatus === 'Rechazado' && !rejectReason) return;
-    try {
-      await fetch(`http://localhost:5000/api/cvs/${cvId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, rejectedReason: rejectReason })
-      });
-      setRejectingId(null);
-      setRejectReason('');
-      fetchData();
-    } catch (e) { console.error(e); }
-  };
 
   const handleShareSla = async (e) => {
     e.preventDefault();
@@ -89,6 +80,10 @@ const Colaboracion = () => {
     }
   };
 
+  const completedActivity = tasks
+    .filter(t => t.status === 'COMPLETED' && (t.type === 'REQUEST_CVS' || (t.type === 'REVIEW_CV' && t.description === 'Institución envío cv')))
+    .slice(0, 5);
+
   return (
     <div className="space-y-6">
       <div>
@@ -96,12 +91,14 @@ const Colaboracion = () => {
         <p className="text-slate-500 dark:text-slate-400">Espacio privado para compartir y hacer seguimiento de talento entre instituciones.</p>
       </div>
 
+
+
       <div className="flex border-b border-slate-200 dark:border-slate-800">
         <button 
           onClick={() => setActiveTab('recibidos')}
           className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors border-b-2 ${activeTab === 'recibidos' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
         >
-          <Inbox className="w-5 h-5" /> Recibidos <span className="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 py-0.5 px-2 rounded-full text-xs">{incomingCvs.length}</span>
+          <Inbox className="w-5 h-5" /> Colaboraciones <span className="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 py-0.5 px-2 rounded-full text-xs">{completedActivity.length}</span>
         </button>
         <button 
           onClick={() => setActiveTab('enviar')}
@@ -117,46 +114,43 @@ const Colaboracion = () => {
         <div className="glass-panel p-6 rounded-2xl min-h-[400px]">
           {activeTab === 'recibidos' && (
             <div className="space-y-4">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Perfiles a Revisar</h3>
-              {incomingCvs.length === 0 ? (
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Actividad Mínima Reciente</h3>
+              {completedActivity.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl max-w-lg mx-auto bg-slate-50/50 dark:bg-slate-900/50">
                   <Inbox className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                  <p className="text-slate-500">No hay currículums pendientes por revisar.</p>
+                  <p className="text-slate-500">No hay actividad reciente completada.</p>
                 </div>
-              ) : incomingCvs.map(cv => (
-                <div key={cv.id} className="p-4 bg-white/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all hover:shadow-md hover:border-blue-500/30">
-                  <div className="flex-1">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-1">{cv.name} <span className="px-2 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 text-xs rounded-md">Origen: Inst. {cv.sourceInstitutionName || (typeof cv.sourceInstitutionId === 'string' ? cv.sourceInstitutionId : cv.sourceInstitutionId?._id)}</span></h4>
-                    <p className="text-sm text-slate-500">Documento: {cv.document}</p>
-                    <div className="mt-2 text-xs font-semibold text-amber-600 dark:text-amber-400 flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded w-fit">
-                      <AlertCircle className="w-3 h-3" /> Tienes hasta el {cv.collaborationDeadline} para contestar, sino el estatus se cierra automáticamente.
-                    </div>
-                  </div>
-                  
-                  {rejectingId === cv.id ? (
-                    <div className="flex items-center gap-2 w-full md:w-auto">
-                      <input 
-                        type="text" 
-                        placeholder="Escribe el motivo de rechazo..." 
-                        value={rejectReason}
-                        onChange={e => setRejectReason(e.target.value)}
-                        className="px-3 py-2 text-sm border rounded-lg bg-white dark:bg-slate-900 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 flex-1 md:w-56 outline-none dark:text-white transition-all shadow-sm"
-                      />
-                      <button onClick={() => handleStatusChange(cv.id, 'Rechazado')} className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-red-500/30">Confirmar</button>
-                      <button onClick={() => setRejectingId(null)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-sm font-medium px-2 py-1">Cancelar</button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-                      <button onClick={() => handleStatusChange(cv.id, 'Aprobado')} className="flex items-center justify-center gap-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-400 dark:hover:bg-emerald-900/40 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm w-full md:w-auto">
-                        <CheckCircle2 className="w-4 h-4" /> Aprobar Perfil
-                      </button>
-                      <button onClick={() => setRejectingId(cv.id)} className="flex items-center justify-center gap-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-900/40 px-3 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm w-full md:w-auto">
-                        <XCircle className="w-4 h-4" /> Rechazar
-                      </button>
-                    </div>
-                  )}
+              ) : (
+                <div className="space-y-3">
+                  {completedActivity.map(t => {
+                    const dateStr = new Date(t.createdAt).toLocaleDateString();
+                    let msg = '';
+                    const actualVac = t.targetVacancyId || t.cvId?.targetVacancyId;
+                    const vacancyStr = actualVac?.role ? ` para la vacante de ${actualVac.role}` : '';
+                    if (t.type === 'REQUEST_CVS') {
+                       if (t.senderEmail === user.email) {
+                          msg = `Solicitaste CV a ${getInstName(t.targetInstitutionId) || 'la institución destino'}${vacancyStr} el ${dateStr}`;
+                       } else {
+                          const requesterName = getInstName(actualVac?.institutionId) || actualVac?.institutionName || 'Otra Institución';
+                          msg = `${requesterName} te solicitó CV${vacancyStr} el ${dateStr}`;
+                       }
+                    } else if (t.type === 'REVIEW_CV' && t.description === 'Institución envío cv') {
+                       if (t.senderEmail === user.email) {
+                          msg = `Enviaste CV a ${getInstName(t.cvId?.targetInstitutionId || t.targetInstitutionId) || 'la institución destino'}${vacancyStr} el ${dateStr}`;
+                       } else {
+                          const senderName = getInstName(t.sourceInstitutionId || t.cvId?.sourceInstitutionId) || 'Otra Institución';
+                          msg = `${senderName} te envió CV${vacancyStr} el ${dateStr}`;
+                       }
+                    }
+                    return (
+                      <div key={t.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/50 rounded-xl flex items-center gap-3 transition-all hover:shadow-md">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+                        <p className="text-slate-700 dark:text-slate-300 font-medium text-sm md:text-base">{msg}</p>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -216,7 +210,7 @@ const Colaboracion = () => {
                              <span className={`px-2 py-0.5 text-[10px] uppercase font-black tracking-wider rounded-md ${cv.status === 'Rechazado' ? 'bg-red-100 text-red-700' : cv.status === 'Aprobado' || cv.status === 'Contratado' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{cv.status}</span>
                           </h4>
                           <p className="text-sm text-slate-500 flex items-center gap-1">
-                            Enviado para cubrir vacante externa en <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded ml-1">Inst. {cv.targetInstitutionId}</span> ({cv.targetVacancyId?.role || 'Puesto no especificado'}).
+                            Enviaste cv a <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded mx-1">{cv.targetInstitutionId}</span> ({cv.targetVacancyId?.role || 'Puesto no especificado'}).
                           </p>
                         </div>
                         <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 flex items-center gap-2 shrink-0"><FileText className="w-4 h-4"/> Ver Archivo</a>

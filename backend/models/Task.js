@@ -7,6 +7,8 @@ const taskSchema = new mongoose.Schema({
   targetEmail: { type: String, required: true },
   targetVacancyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vacancy' },
   cvId: { type: mongoose.Schema.Types.ObjectId, ref: 'CV' },
+  sourceInstitutionId: { type: String },
+  targetInstitutionId: { type: String },
   description: { type: String },
   status: { type: String, enum: ['PENDING', 'COMPLETED', 'EXPIRED'], default: 'PENDING' },
   dueDate: { type: Date, required: true },

@@ -13,7 +13,7 @@ const Layout = ({ children }) => {
   };
 
   const navItems = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: true },
     { to: '/vacantes', icon: Briefcase, label: 'Vacantes' },
     { to: '/tareas', icon: CheckSquare, label: 'Mis Trámites' },
     { to: '/colaboracion', icon: Users, label: 'Colaboración' },
@@ -43,8 +43,8 @@ const Layout = ({ children }) => {
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.filter(item => {
              if (item.adminOnly && user?.role !== 'admin') return false;
-             // El perfil de usuario solo tendrá acceso a vacantes
-             if (user?.role === 'usuario' && item.to !== '/vacantes') return false;
+             // El perfil de usuario (role: 'user') solo tendrá acceso a vacantes y CVs
+             if (user?.role === 'user' && item.to !== '/vacantes' && item.to !== '/cvs') return false;
              return true;
           }).map((item) => (
             <NavLink

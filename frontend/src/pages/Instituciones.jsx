@@ -88,11 +88,6 @@ const Instituciones = () => {
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-500 dark:from-white dark:to-slate-400">Directorio de Entidades</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Instituciones registradas en nuestra red colaborativa.</p>
         </div>
-        {user?.role === 'admin' && (
-          <button onClick={()=>setShowAddInst(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-2">
-            <Plus className="w-5 h-5"/> Registrar Entidad
-          </button>
-        )}
       </div>
 
       {loading ? (
@@ -149,41 +144,6 @@ const Instituciones = () => {
         </div>
       )}
 
-      {/* ADD INSTITUTION MODAL */}
-      {showAddInst && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in" onClick={()=>setShowAddInst(false)}>
-          <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden glass-panel" onClick={e=>e.stopPropagation()}>
-             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
-               <h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><Building className="text-indigo-500"/> Alta de Institución</h2>
-               <button type="button" onClick={() => setShowAddInst(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                 <X className="w-6 h-6" />
-               </button>
-             </div>
-             <form onSubmit={handleAddInstitution} className="p-6 space-y-5">
-                <div>
-                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Clave de la Entidad (ej. 'A' , 'UAA')</label>
-                  <input type="text" value={formInst._id} onChange={e=>setFormInst({...formInst, _id: e.target.value.toUpperCase()})} required placeholder="Identificador corto" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none uppercase font-bold tracking-wider" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Nombre Oficial</label>
-                  <input type="text" value={formInst.name} onChange={e=>setFormInst({...formInst, name: e.target.value})} required placeholder="Ej. Universidad Anáhuac" className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder-slate-400" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Perfil Corporativo</label>
-                  <input type="text" value={formInst.profile} onChange={e=>setFormInst({...formInst, profile: e.target.value})} required placeholder="Tech, Salud, Manufactura..." className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none placeholder-slate-400" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Logo Institucional (Requerido)</label>
-                  <input type="file" onChange={e=>setLogoFile(e.target.files[0])} accept="image/*" required className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl dark:bg-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer dark:text-slate-300" />
-                </div>
-                
-                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold shadow-xl shadow-indigo-500/30 transition-all mt-4 text-lg">
-                  Integrar a la Red
-                </button>
-             </form>
-          </div>
-        </div>
-      )}
 
       {/* EDIT INSTITUTION CONTACTS MODAL */}
       {editingInst && (
@@ -214,9 +174,9 @@ const Instituciones = () => {
         </div>
       )}
       {selectedInstUsers && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in" onClick={()=>setSelectedInstUsers(null)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-sm p-4 pt-10 animate-fade-in" onClick={()=>setSelectedInstUsers(null)}>
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden glass-panel" onClick={e=>e.stopPropagation()}>
-             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
+             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 relative">
                <h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><UsersIcon className="text-indigo-500"/> Usuarios en {selectedInstUsers.name}</h2>
                <button type="button" onClick={() => setSelectedInstUsers(null)} className="text-slate-400 hover:text-slate-600 transition-colors">
                  <X className="w-6 h-6" />

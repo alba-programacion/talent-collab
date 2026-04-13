@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
-import { Calendar, AlertCircle, CheckCircle2, FileText, Banknote } from 'lucide-react';
+import { Calendar, AlertCircle, CheckCircle2, FileText, Banknote, X } from 'lucide-react';
 
 const Tareas = () => {
   const { user } = useAuth();
@@ -48,11 +48,18 @@ const Tareas = () => {
     try {
       const isReceiptOnly = selectedTask.description === 'Institución rechazó el CV' || selectedTask.description === 'Institución aceptó el CV' || selectedTask.description === 'Institución envío cv';
       if (!isReceiptOnly) {
+        if (!selectedVacancyId) {
+           setError('Debes seleccionar una opción en el menú de vacantes.');
+           return;
+        }
+        const actualOutcome = selectedVacancyId === 'NO_VACANCY' ? 'Rechazado' : 'Aprobado';
+        const actualReason = selectedVacancyId === 'NO_VACANCY' ? 'No hay vacante para este perfil' : '';
+        
         // 1. Update CV Status
         const resCv = await fetch(`http://localhost:5000/api/cvs/${selectedTask.cvId._id}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: outcome, rejectedReason: outcome === 'Rechazado' ? rejectedReason : '', rejectedBy: user.email, targetVacancyId: outcome === 'Aprobado' ? selectedVacancyId : null })
+          body: JSON.stringify({ status: actualOutcome, rejectedReason: actualReason, rejectedBy: user.email, targetVacancyId: actualOutcome === 'Aprobado' ? selectedVacancyId : null })
         });
         if(!resCv.ok) throw new Error('Error al actualizar status del CV');
       }
@@ -126,7 +133,9 @@ const Tareas = () => {
         <div className="text-center py-12"><div className="w-8 h-8 rounded-full border-4 border-slate-200 border-t-indigo-600 animate-spin mx-auto"></div></div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
-          {validTasks.filter(t => activeTab === 'pendientes' ? t.status !== 'COMPLETED' : t.status === 'COMPLETED').map(t => (
+          {validTasks.filter(t => activeTab === 'pendientes' ? t.status !== 'COMPLETED' : t.status === 'COMPLETED').map(t => {
+            const actualVac = t.targetVacancyId || t.cvId?.targetVacancyId;
+            return (
             <div key={t.id} className={`glass-panel p-6 rounded-2xl flex flex-col md:flex-row gap-6 relative overflow-hidden transition-all ${t.status === 'COMPLETED' ? 'opacity-60 grayscale-[50%]' : ''}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
@@ -134,17 +143,23 @@ const Tareas = () => {
                   <span className="text-sm text-slate-500 font-medium">{new Date(t.createdAt).toLocaleDateString()}</span>
                 </div>
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 flex items-center flex-wrap gap-2">
-                  {t.type === 'REQUEST_CVS' ? 'Solicitud de CV' :
+                  {t.type === 'REQUEST_CVS' ? 
+                     (t.senderEmail === user.email ? 
+                         `Solicitaste CV a ${t.targetInstitutionId || 'Otra Institución'}${actualVac?.role ? ` para la vacante de ${actualVac.role}` : ''}` : 
+                         `${actualVac?.institutionName || actualVac?.institutionId || 'Otra Institución'} te solicitó CV${actualVac?.role ? ` para la vacante de ${actualVac.role}` : ''}`)
+                   :
                    t.type === 'REVIEW_CV' && t.description === 'Institución envío cv' ? 
                      (t.senderEmail === user.email ? 
-                        `Enviaste CV a Inst. ${t.cvId?.targetInstitutionId || 'Destino'} (Vacante: ${t.targetVacancyId?.role || 'General'})` : 
-                        `¡Inst. ${t.cvId?.sourceInstitutionId || 'Externa'} envió CV a tu vacante ${t.targetVacancyId?.role ? `(${t.targetVacancyId.role})` : ''}!`) 
+                        `Enviaste cv a ${t.cvId?.targetInstitutionId || 'Destino'}${actualVac?.role ? ` para la vacante de ${actualVac.role}` : ''}` : 
+                        `${t.cvId?.sourceInstitutionId || 'Externa'} envió cv a tu vacante${actualVac?.role ? ` de ${actualVac.role}` : ''}`)  
                    :
-                   t.type === 'REVIEW_CV' && t.description === 'Institución rechazó el CV' ? `❌ La Institución destino rechazó tu CV de ${t.cvId?.name}` :
-                   t.type === 'REVIEW_CV' && t.description === 'Institución aceptó el CV' ? `✅ La Institución destino aceptó tu CV de ${t.cvId?.name}` :
+                   t.type === 'REVIEW_CV' && t.description === 'Institución rechazó el CV' ? `❌ ${t.cvId?.targetInstitutionId || 'La Institución destino'} rechazó tu CV de ${t.cvId?.name}` :
+                   t.type === 'REVIEW_CV' && t.description === 'Institución aceptó el CV' ? `✅ ${t.cvId?.targetInstitutionId || 'La Institución destino'} aceptó tu CV de ${t.cvId?.name}` :
                    'Revisión de Candidato: ' + t.cvId?.name} 
                   {t.senderEmail === user.email ? (
-                    <span className="text-[10px] uppercase tracking-wider bg-purple-100 text-purple-700 font-black px-2 py-1 rounded-lg">Enviado por nosotros</span>
+                    <span className="text-[10px] uppercase tracking-wider bg-purple-100 text-purple-700 font-black px-2 py-1 rounded-lg">
+                      Enviado por nosotros a {t.type === 'REQUEST_CVS' ? t.targetInstitutionId : (t.description === 'Institución envío cv' ? t.cvId?.targetInstitutionId : ((t.description === 'Institución aceptó el CV' || t.description === 'Institución rechazó el CV') ? (t.cvId?.sourceInstitutionName || t.cvId?.sourceInstitutionId) : t.targetEmail)) || 'Destino'}
+                    </span>
                   ) : (
                     <span className="text-[10px] uppercase tracking-wider bg-blue-100 text-blue-700 font-black px-2 py-1 rounded-lg">Recibido</span>
                   )}
@@ -152,8 +167,8 @@ const Tareas = () => {
                 <p className="text-slate-600 dark:text-slate-300 mb-4 bg-slate-100 dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700 italic">"{t.description}"</p>
                 
                 <div className="flex flex-col gap-2 text-sm text-slate-500 mb-4">
-                  <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400"><FileText className="w-4 h-4"/> Vacante Objetivo: {t.targetVacancyId?.role || 'Bolsa General'}</div>
-                  <div className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400"><Banknote className="w-4 h-4"/> {t.type === 'REQUEST_CVS' ? `Solicitado por: ${t.senderEmail}` : `Origen del CV: Inst. ${t.cvId?.sourceInstitutionId || 'Directa'} (Enviado por: ${t.senderEmail})`}</div>
+                  <div className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400"><FileText className="w-4 h-4"/> Vacante Objetivo: {actualVac?.role || 'Bolsa General'}</div>
+                  <div className="flex items-center gap-1 font-semibold text-indigo-600 dark:text-indigo-400"><Banknote className="w-4 h-4"/> {t.type === 'REQUEST_CVS' ? `Solicitado por: ${t.senderEmail}` : `Origen del CV: ${t.cvId?.sourceInstitutionId || 'Directa'} (Enviado por: ${t.senderEmail})`}</div>
                 </div>
               </div>
               
@@ -182,7 +197,7 @@ const Tareas = () => {
                 </div>
               )}
             </div>
-          ))}
+          )})}
           {validTasks.filter(t => activeTab === 'pendientes' ? t.status !== 'COMPLETED' : t.status === 'COMPLETED').length === 0 && (
             <div className="glass-panel p-12 rounded-3xl text-center">
               <CheckCircle2 className="w-16 h-16 text-slate-300 dark:text-slate-700 mx-auto mb-4" />
@@ -195,10 +210,11 @@ const Tareas = () => {
 
       {/* RESOLVE MODAL */}
       {selectedTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fade-in" onClick={()=>setSelectedTask(null)}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/50 backdrop-blur-sm p-4 pt-10 animate-fade-in" onClick={()=>setSelectedTask(null)}>
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden glass-panel" onClick={e=>e.stopPropagation()}>
-             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between">
+             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center relative">
                <h2 className="text-xl font-bold dark:text-white">Dictaminar Postulación</h2>
+               <button onClick={() => setSelectedTask(null)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-all"><X className="w-5 h-5"/></button>
              </div>
              <form onSubmit={selectedTask.type === 'REQUEST_CVS' ? handleFulfillCv : handleResolve} className="p-6 space-y-4">
                 {error && <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm mb-4 border border-red-200">{error}</div>}
@@ -236,40 +252,16 @@ const Tareas = () => {
                             {selectedTask.description === 'Institución envío cv' ? 'El CV ya fue enviado directamente a tu vacante. Entra a la red de Vacantes para revisarlo y continuar su proceso allá. Marca esta notificación de recibido como Enterado.' : 'Toma nota de esta resolución. Marca la tarea como completada para limpiar tu bandeja.'}
                           </div>
                         ) : (
-                          <>
-                            <div>
-                              <label className="block text-sm font-medium dark:text-slate-300 mb-1">Determinar Resultado</label>
-                              <select value={outcome} onChange={e=>setOutcome(e.target.value)} className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white">
-                                <option value="Aprobado">Aprobar CV e Instalar en Vacante</option>
-                                <option value="Rechazado">Rechazar CV (Descartado)</option>
-                              </select>
-                            </div>
-
-                            {outcome === 'Aprobado' && (
-                               <div>
-                                  <label className="block text-sm font-medium dark:text-slate-300 mb-1">Seleccionar mi Vacante</label>
-                                  <select value={selectedVacancyId} onChange={e=>setSelectedVacancyId(e.target.value)} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white">
-                                     <option value="">[Bolsa General - Sin Vacante]</option>
-                                     {myVacancies.map(v => (
-                                        <option key={v.id} value={v.id}>{v.role}</option>
-                                     ))}
-                                  </select>
-                                  {myVacancies.length === 0 && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">⚠ No tienes vacantes disponibles publicadas. Puedes rechazar el trámite o guardarlo en Bolsa General.</p>}
-                               </div>
-                            )}
-                            
-                            {outcome === 'Rechazado' && (
-                              <div>
-                                <div className="flex justify-between items-end mb-1">
-                                  <label className="block text-sm font-medium dark:text-slate-300">Motivo de Rechazo</label>
-                                  <button type="button" onClick={()=>setRejectedReason('No tengo vacantes disponibles para este CV actualmente.')} className="text-[10px] bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 px-2 py-1 rounded transition-colors">
-                                    Llenado rápido: "Sin vacantes"
-                                  </button>
-                                </div>
-                                <textarea value={rejectedReason} onChange={e=>setRejectedReason(e.target.value)} required rows="3" className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl outline-none dark:text-white placeholder:text-slate-400" placeholder="Ej: Su perfil excede nuestro presupuesto, o no hay vacantes."></textarea>
-                              </div>
-                            )}
-                          </>
+                          <div className="animate-fade-in">
+                            <label className="block text-sm font-medium dark:text-slate-300 mb-1">Seleccionar mi Vacante</label>
+                            <select value={selectedVacancyId} onChange={e=>setSelectedVacancyId(e.target.value)} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none dark:text-white" required>
+                              <option value="" disabled>-- Seleccione una opción --</option>
+                              <option value="NO_VACANCY">No hay vacante para este cv</option>
+                              {myVacancies.map(v => (
+                                 <option key={v.id} value={v.id}>{v.role}</option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </>
                     )}
@@ -307,7 +299,7 @@ const Tareas = () => {
                 )}
                 
                 {selectedTask.status !== 'COMPLETED' && selectedTask.senderEmail !== user.email && (
-                  <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-medium shadow-lg shadow-emerald-500/30 transition-all">
+                  <button type="submit" disabled={(!isReceiptOnly && selectedTask.type !== 'REQUEST_CVS' && !selectedVacancyId) ? true : false} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-3 rounded-xl font-medium shadow-lg shadow-emerald-500/30 transition-all">
                     {selectedTask.type === 'REQUEST_CVS' ? 'Enviar CV y Completar Solicitud' : 
                      isReceiptOnly ? 'Entendido (Marcar de Enterado)' : 'Completar Tarea'}
                   </button>

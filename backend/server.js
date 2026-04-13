@@ -56,18 +56,18 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { name, email, password, role, institutionId, newInstitutionName, newInstitutionProfile } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Faltan datos requeridos (Nombre, correo, contraseña)' });
-    
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: 'Este correo ya se encuentra registrado.' });
-    
+
     const finalRole = role && ['user', 'management', 'admin'].includes(role) ? role : 'user';
     let finalInstId = institutionId;
 
-    if (!institutionId && newInstitutionName && ['admin', 'management'].includes(finalRole)) {
-      if (!newInstitutionProfile) return res.status(400).json({error: 'Faltan datos de la nueva institución (giro).'});
+    if (!institutionId && newInstitutionName) {
+      if (!newInstitutionProfile) return res.status(400).json({ error: 'Faltan datos de la nueva institución (giro).' });
       const instExists = await Institution.findOne({ name: { $regex: new RegExp(`^${newInstitutionName.trim()}$`, 'i') } });
       if (instExists) return res.status(400).json({ error: `La institución "${instExists.name}" ya existe. Por favor selecciónala de la lista.` });
-      
+
       const newId = newInstitutionName.replace(/\s+/g, '').substring(0, 4).toUpperCase() + Math.floor(Math.random() * 1000);
       const newInst = await Institution.create({ _id: newId, name: newInstitutionName.trim(), profile: newInstitutionProfile });
       finalInstId = newInst._id;
@@ -75,14 +75,14 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!finalInstId) return res.status(400).json({ error: 'Debes seleccionar o crear una institución aportadora válida.' });
 
-    const newUser = new User({ 
-      name, 
-      email, 
-      password, 
+    const newUser = new User({
+      name,
+      email,
+      password,
       role: finalRole,
       institutionId: finalInstId
     });
-    
+
     await newUser.save();
     res.status(201).json({ message: 'Registro exitoso', user: { id: newUser._id, name, email, role: newUser.role, institutionId: newUser.institutionId } });
   } catch (err) { res.status(500).json({ error: 'Error interno del servidor al registrar.' }); }
@@ -94,16 +94,16 @@ app.post('/api/auth/login', async (req, res) => {
     const dbUser = await User.findOne({ email }).populate('institutionId');
     if (dbUser) {
       if (await dbUser.comparePassword(password)) {
-        return res.json({ 
-          token: 'jwt-' + dbUser._id, 
-          user: { 
-            id: dbUser._id, 
-            name: dbUser.name, 
-            email: dbUser.email, 
-            role: dbUser.role, 
+        return res.json({
+          token: 'jwt-' + dbUser._id,
+          user: {
+            id: dbUser._id,
+            name: dbUser.name,
+            email: dbUser.email,
+            role: dbUser.role,
             institutionId: dbUser.institutionId?._id || dbUser.institutionId,
             institutionName: dbUser.institutionId?.name || 'Administración Central'
-          } 
+          }
         });
       }
       return res.status(401).json({ error: 'Contraseña incorrecta' });
@@ -118,26 +118,91 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.get('/api/metrics', async (req, res) => {
-  const [totalVacancies, totalInstitutions, totalCvs, cvsInProcess] = await Promise.all([
-    Vacancy.countDocuments(), Institution.countDocuments(), CV.countDocuments(), CV.countDocuments({ status: 'En Proceso' })
-  ]);
-  res.json({ totalVacancies, totalInstitutions, totalCvs, cvsInProcess });
+  try {
+    const [totalVacancies, totalInstitutions, totalCvs, cvsInProcess] = await Promise.all([
+      Vacancy.countDocuments(),
+      Institution.countDocuments(),
+      CV.countDocuments({ $or: [{ targetVacancyId: { $ne: null } }, { targetInstitutionId: { $ne: null } }] }),
+      CV.countDocuments({ status: 'En Proceso' })
+    ]);
+
+    // 1. Task Status Distribution (Requested, Sent, Open)
+    // "Requested" = REQUEST_CVS pending
+    // "Sent" = REVIEW_CV where description is 'Institución envío cv'
+    // "Open" = All active tasks excluding completed ones? Or just general status?
+    // Let's use a more specific logic for the prompt: "Solicitado, Enviado y Abierto"
+    const requestedCount = await Task.countDocuments({ type: 'REQUEST_CVS', status: 'PENDING' });
+    const sentCount = await Task.countDocuments({ description: 'Institución envío cv' });
+    const openCount = await Task.countDocuments({ status: 'PENDING' });
+
+    // 2. Vacancies by Institution
+    const vacanciesByInst = await Vacancy.aggregate([
+      { $group: { _id: "$institutionId", count: { $sum: 1 } } }
+    ]);
+    // Populate names manually or with another lookup if needed, but IDs are fine for now if we map them on frontend or here
+    const instNames = await Institution.find({ _id: { $in: vacanciesByInst.map(v => v._id) } });
+    const vacanciesByInstFormatted = vacanciesByInst.map(v => {
+      const inst = instNames.find(i => i._id === v._id);
+      return { name: inst ? inst.name : v._id, count: v.count };
+    });
+
+    // 3. CV Volume by Institution (Source)
+    const cvsByInst = await CV.aggregate([
+      { $group: { _id: "$sourceInstitutionId", count: { $sum: 1 } } }
+    ]);
+    const instNamesCvs = await Institution.find({ _id: { $in: cvsByInst.map(v => v._id) } });
+    const cvsByInstFormatted = cvsByInst.map(v => {
+      const inst = instNamesCvs.find(i => i._id === v._id);
+      return { name: inst ? inst.name : v._id, count: v.count };
+    });
+
+    // 4. CV Debt Report (Institutions that owe CVs)
+    // Filter REQUEST_CVS tasks that are PENDING
+    const debt = await Task.aggregate([
+      { $match: { type: 'REQUEST_CVS', status: 'PENDING' } },
+      { $group: { _id: "$targetEmail", count: { $sum: 1 } } }
+    ]);
+    // Map targetEmail to Institution Name if possible
+    const users = await User.find({ email: { $in: debt.map(d => d._id) } }).populate('institutionId');
+    const debtFormatted = debt.map(d => {
+      const user = users.find(u => u.email === d._id);
+      return {
+        name: user?.institutionId?.name || d._id,
+        count: d.count
+      };
+    });
+
+    // 5. Candidates In Process List (Name, Vacancy, Institution)
+    const inProcessCvs = await CV.find({ status: 'En Proceso' })
+      .populate({
+        path: 'targetVacancyId',
+        populate: { path: 'institutionId' }
+      })
+      .populate('sourceInstitutionId');
+
+    const cvsInProcessList = inProcessCvs.map(c => ({
+      name: c.name,
+      vacancyRole: c.targetVacancyId?.role || 'Bolsa General',
+      targetInstitution: c.targetVacancyId?.institutionId?.name || 'N/A',
+      sourceInstitution: c.sourceInstitutionId?.name || 'Directa'
+    }));
+
+    res.json({
+      totalVacancies, totalInstitutions, totalCvs, cvsInProcess,
+      requestStats: { requested: requestedCount, sent: sentCount, open: openCount },
+      vacanciesByInst: vacanciesByInstFormatted,
+      cvsByInst: cvsByInstFormatted,
+      cvDebt: debtFormatted,
+      cvsInProcessList
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/institutions', async (req, res) => {
   const insts = await Institution.find();
-  res.json(insts.map(i => ({ 
-    id: i._id, name: i.name, profile: i.profile, logo: i.logo,
-    titularName: i.titularName, titularMail: i.titularMail, titularPhone: i.titularPhone,
-    suplenteName: i.suplenteName, suplenteMail: i.suplenteMail, suplentePhone: i.suplentePhone
-  })));
-});
-
-app.patch('/api/institutions/:id', async (req, res) => {
-  try {
-    const updated = await Institution.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(updated);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  res.json(insts.map(i => ({ id: i._id, name: i.name, profile: i.profile, logo: i.logo })));
 });
 
 app.post('/api/institutions', upload.single('logo'), async (req, res) => {
@@ -149,7 +214,7 @@ app.post('/api/institutions', upload.single('logo'), async (req, res) => {
     }
     const inst = await Institution.create({ _id, name, profile, logo: logoStr });
     res.status(201).json(inst);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.get('/api/vacancies', async (req, res) => {
@@ -175,7 +240,7 @@ app.post('/api/vacancies', async (req, res) => {
   try {
     const v = await Vacancy.create(req.body);
     res.json(v);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.patch('/api/vacancies/:id/status', async (req, res) => {
@@ -184,13 +249,21 @@ app.patch('/api/vacancies/:id/status', async (req, res) => {
     v.status = req.body.status;
     await v.save();
     res.json(v);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/vacancies/:id', async (req, res) => {
+  try {
+    const v = await Vacancy.findByIdAndDelete(req.params.id);
+    if (!v) return res.status(404).json({ error: 'Vacante no encontrada' });
+    res.json({ message: 'Vacante eliminada' });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.get('/api/cvs', async (req, res) => {
   const cvs = await CV.find().populate('sourceInstitutionId').populate('targetVacancyId');
   res.json(cvs.map(c => ({
-    ...c.toObject(), id: c._id, 
+    ...c.toObject(), id: c._id,
     sourceInstitutionName: c.sourceInstitutionId?.name || '',
   })));
 });
@@ -199,8 +272,10 @@ app.get('/api/cvs', async (req, res) => {
 app.post('/api/cvs', upload.single('document'), async (req, res) => {
   try {
     const { name, email, sourceInstitutionId } = req.body;
-    if (!req.file) return res.status(400).json({error: 'Documento PDF obligatorio'});
-    if (!sourceInstitutionId || sourceInstitutionId === 'null') return res.status(403).json({error: 'Propiedad de CV requerida por los estatutos de colaboración.'});
+    if (!req.file) return res.status(400).json({ error: 'Documento PDF obligatorio' });
+    if (!sourceInstitutionId || sourceInstitutionId === 'null' || sourceInstitutionId === 'undefined') {
+      return res.status(403).json({ error: 'Trazabilidad de origen obligatoria: Se requiere Institución de Origen para subir CVs.' });
+    }
 
     const newCv = new CV({
       name, email, document: req.file.filename,
@@ -208,43 +283,43 @@ app.post('/api/cvs', upload.single('document'), async (req, res) => {
     });
     await newCv.save();
     res.status(201).json(newCv);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // Phase 6: Simple Vacancy Submit (No SLA Task)
 app.post('/api/cvs/vacancy', upload.single('document'), async (req, res) => {
   try {
-    let { name, email, targetVacancyId, sourceInstitutionId } = req.body;
-    if (!req.file) return res.status(400).json({error: 'Documento PDF obligatorio'});
-    
-    // Fallback for global admins without institutionId
+    const { name, email, targetVacancyId, sourceInstitutionId } = req.body;
+    if (!req.file) return res.status(400).json({ error: 'Documento PDF obligatorio' });
     if (!sourceInstitutionId || sourceInstitutionId === 'null' || sourceInstitutionId === 'undefined') {
-       sourceInstitutionId = 'A'; // Default to Institution A for central audit if no ID provided
+      return res.status(403).json({ error: 'Trazabilidad de origen obligatoria: Se requiere Institución de Origen para postular CVs.' });
     }
-    
+
     const cv = await CV.create({
       name, email, document: req.file.filename,
       sourceInstitutionId,
       targetVacancyId, status: 'Disponible'
     });
-    res.status(201).json(cv);
-  } catch(e) { res.status(400).json({error: e.message}); }
+    res.status(201).json({ cv });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // Phase 6: Inter-Institutional Collaboration (SLA Task generation)
 app.post('/api/cvs/collab', upload.single('document'), async (req, res) => {
   try {
     const { name, email, senderEmail, description, targetEmail, sourceInstitutionId, dueDate } = req.body;
-    if (!req.file) return res.status(400).json({error: 'Documento PDF obligatorio'});
-    if (!sourceInstitutionId || sourceInstitutionId === 'null') return res.status(403).json({error: 'Propiedad de CV requerida por los estatutos de colaboración.'});
-    
+    if (!req.file) return res.status(400).json({ error: 'Documento PDF obligatorio' });
+    if (!sourceInstitutionId || sourceInstitutionId === 'null' || sourceInstitutionId === 'undefined') {
+      return res.status(403).json({ error: 'Trazabilidad de origen obligatoria: Se requiere Institución de Origen para colaboración.' });
+    }
+
     const cv = await CV.create({
       name, email, document: req.file.filename,
       sourceInstitutionId,
       targetInstitutionId: targetEmail, // Save destination email for tracking rendering
       status: 'En Proceso'
     });
-    
+
     // SLA Date processing
     const finalDueDate = dueDate ? new Date(dueDate) : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
@@ -254,23 +329,24 @@ app.post('/api/cvs/collab', upload.single('document'), async (req, res) => {
       senderEmail,
       targetEmail,
       cvId: cv._id,
+      sourceInstitutionId, // Explicitly store origin
       description: description || 'Por favor revisa este CV.',
       dueDate: finalDueDate
     });
     res.status(201).json({ cv, task });
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // Legacy Bilateral Collaboration Share CV
 app.post('/api/cvs/:id/share', async (req, res) => {
   try {
     const cv = await CV.findById(req.params.id);
-    if (!cv || cv.status === 'En Proceso') return res.status(400).json({error:'No disponible'});
+    if (!cv || cv.status === 'En Proceso') return res.status(400).json({ error: 'No disponible' });
     cv.status = 'En Proceso';
     cv.targetVacancyId = req.body.targetVacancyId || null;
     await cv.save();
     res.json(cv);
-  } catch(e) { res.status(400).json({error:e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.patch('/api/cvs/:id/status', async (req, res) => {
@@ -278,17 +354,17 @@ app.patch('/api/cvs/:id/status', async (req, res) => {
     const cv = await CV.findById(req.params.id);
     const { status, rejectedReason, rejectedBy, targetVacancyId } = req.body;
     cv.status = status;
-    
+
     let historyAction = `Cambiado a ${status}`;
-    if (status === 'Rechazado') { 
+    if (status === 'Rechazado') {
       historyAction = 'Rechazado';
       cv.rejectedReason = rejectedReason;
       if (rejectedBy) cv.rejectedBy = rejectedBy;
-      cv.targetVacancyId = null; 
+      cv.targetVacancyId = null;
     } else if (status === 'Aprobado' || status === 'Contratado') {
       historyAction = 'Aprobado';
       if (targetVacancyId !== undefined) {
-         cv.targetVacancyId = targetVacancyId || null;
+        cv.targetVacancyId = targetVacancyId || null;
       }
     }
 
@@ -304,13 +380,14 @@ app.patch('/api/cvs/:id/status', async (req, res) => {
       let sourceManager = await User.findOne({ institutionId: cv.sourceInstitutionId, role: { $in: ['management', 'admin'] } });
       if (!sourceManager) sourceManager = await User.findOne({ institutionId: cv.sourceInstitutionId });
       if (!sourceManager) sourceManager = MOCK_USERS.find(u => u.institutionId === cv.sourceInstitutionId);
-      
+
       if (sourceManager) {
         await Task.create({
           type: 'REVIEW_CV',
           senderEmail: rejectedBy || 'sistema@talent.com',
           targetEmail: sourceManager.email,
           cvId: cv._id,
+          targetVacancyId: cv.targetVacancyId,
           description: status === 'Rechazado' ? 'Institución rechazó el CV' : 'Institución aceptó el CV',
           dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
           status: 'PENDING'
@@ -319,48 +396,65 @@ app.patch('/api/cvs/:id/status', async (req, res) => {
     }
 
     res.json(cv);
-  } catch(e) { res.status(400).json({error: e.message}) }
+  } catch (e) { res.status(400).json({ error: e.message }) }
+});
+
+app.delete('/api/cvs/:id', async (req, res) => {
+  try {
+    const cv = await CV.findByIdAndDelete(req.params.id);
+    if (!cv) return res.status(404).json({ error: 'CV no encontrado' });
+    res.json({ message: 'CV eliminado' });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // --- TASKS API ---
 app.post('/api/tasks/request-cv', async (req, res) => {
   try {
-    const { targetVacancyId, senderEmail, targetInstitutionId, description } = req.body;
-    
+    const { targetVacancyId, senderEmail, targetInstitutionId, description, dueDate } = req.body;
+
     // Find manager for the strict target institution
     let manager = await User.findOne({ institutionId: targetInstitutionId, role: { $in: ['management', 'admin'] } });
-    
+
     // Si no está registrado como admin o manager, probamos si hay un usuario basico al menos para que lo reciba
     if (!manager) {
-       manager = await User.findOne({ institutionId: targetInstitutionId });
+      manager = await User.findOne({ institutionId: targetInstitutionId });
     }
 
     // Ultimo recurso: Usuarios de prueba pre-cargados
     if (!manager) {
       manager = MOCK_USERS.find(u => u.institutionId === targetInstitutionId);
     }
-    
+
     if (!manager) {
-      return res.status(404).json({error: `Esa institución no tiene usuarios en el sistema. No se puede enrutar tu solicitud.`});
+      return res.status(404).json({ error: `Esa institución no tiene usuarios en el sistema. No se puede enrutar tu solicitud.` });
     }
+
+    const finalDueDate = dueDate ? new Date(dueDate) : new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
     const task = await Task.create({
       type: 'REQUEST_CVS',
       senderEmail,
       targetEmail: manager.email,
       targetVacancyId,
+      targetInstitutionId,
       description: description || 'Por favor revisa sus CVs y postula candidatos a esta vacante.',
-      dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      dueDate: finalDueDate
     });
     res.status(201).json(task);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.get('/api/tasks', async (req, res) => {
   const { email } = req.query;
   const q = email ? { $or: [{ targetEmail: email }, { senderEmail: email }] } : {};
-  const tasks = await Task.find(q).populate('cvId').populate('targetVacancyId').sort({ createdAt: -1 });
-  res.json(tasks.map(t => ({...t.toObject(), id: t._id, fine: t.fine})));
+  const tasks = await Task.find(q)
+    .populate({ 
+      path: 'cvId', 
+      populate: { path: 'targetVacancyId', populate: { path: 'institutionId' } } 
+    })
+    .populate({ path: 'targetVacancyId', populate: { path: 'institutionId' } })
+    .sort({ createdAt: -1 });
+  res.json(tasks.map(t => ({ ...t.toObject(), id: t._id, fine: t.fine })));
 });
 
 app.patch('/api/tasks/:id/complete', async (req, res) => {
@@ -369,17 +463,20 @@ app.patch('/api/tasks/:id/complete', async (req, res) => {
     t.status = 'COMPLETED';
     await t.save();
     res.json(t);
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res) => {
   try {
     const { name, email, sourceInstitutionId, senderEmail } = req.body;
-    if (!req.file) return res.status(400).json({error: 'Documento PDF obligatorio'});
-    
+    if (!req.file) return res.status(400).json({ error: 'Documento PDF obligatorio' });
+    if (!sourceInstitutionId || sourceInstitutionId === 'null' || sourceInstitutionId === 'undefined') {
+      return res.status(403).json({ error: 'Trazabilidad de origen obligatoria: Se requiere Institución de Origen para completar trámites.' });
+    }
+
     const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({error: 'Tarea no encontrada'});
-    if (task.status === 'COMPLETED') return res.status(400).json({error: 'La tarea ya estaba completada'});
+    if (!task) return res.status(404).json({ error: 'Tarea no encontrada' });
+    if (task.status === 'COMPLETED') return res.status(400).json({ error: 'La tarea ya estaba completada' });
 
     // Encontramos quién pidió originalmente este CV para direccionar el CV y la nueva tarea a su email/institución
     let targetInstId = null;
@@ -387,23 +484,23 @@ app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res
 
     // TRUCO DE RESCATE: Si la tarea no tiene email de origen (corrupta), lo sacamos a partir de la vacante!
     if (!targetEmail && task.targetVacancyId) {
-       const vac = await Vacancy.findById(task.targetVacancyId);
-       if (vac && vac.institutionId) {
-          targetInstId = vac.institutionId;
-          const manager = await User.findOne({ institutionId: targetInstId, role: { $in: ['management', 'admin'] } });
-          if (manager) targetEmail = manager.email;
-       }
+      const vac = await Vacancy.findById(task.targetVacancyId);
+      if (vac && vac.institutionId) {
+        targetInstId = vac.institutionId;
+        const manager = await User.findOne({ institutionId: targetInstId, role: { $in: ['management', 'admin'] } });
+        if (manager) targetEmail = manager.email;
+      }
     }
 
     // Si aún no tenemos targetInstId pero sí un email, lo deducimos
     if (!targetInstId && targetEmail) {
-       const requester = await User.findOne({email: targetEmail});
-       if (requester && requester.institutionId) {
-          targetInstId = requester.institutionId;
-       } else {
-          const mockReq = MOCK_USERS.find(u => u.email === targetEmail);
-          if (mockReq) targetInstId = mockReq.institutionId;
-       }
+      const requester = await User.findOne({ email: targetEmail });
+      if (requester && requester.institutionId) {
+        targetInstId = requester.institutionId;
+      } else {
+        const mockReq = MOCK_USERS.find(u => u.email === targetEmail);
+        if (mockReq) targetInstId = mockReq.institutionId;
+      }
     }
 
     const cv = await CV.create({
@@ -424,6 +521,8 @@ app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res
       senderEmail: senderEmail || 'sistema@talent.com',
       targetEmail: targetEmail || 'admin@system.com',
       cvId: cv._id,
+      sourceInstitutionId, // Store source
+      targetVacancyId: task.targetVacancyId,
       description: 'Institución envío cv',
       dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     });
@@ -432,7 +531,7 @@ app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res
     await task.save();
 
     res.status(201).json({ cv, task });
-  } catch(e) { res.status(400).json({error: e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // --- USERS API (for Institutions Admin) ---
@@ -443,23 +542,36 @@ app.get('/api/users', async (req, res) => {
 app.patch('/api/users/:id', async (req, res) => {
   try {
     const u = await User.findById(req.params.id);
-    if(req.body.role) u.role = req.body.role;
-    if(req.body.institutionId !== undefined) {
+    if (req.body.role) u.role = req.body.role;
+    if (req.body.institutionId !== undefined) {
       u.institutionId = req.body.institutionId === '' ? null : req.body.institutionId;
     }
     await u.save();
     res.json(u);
-  } catch(e) { res.status(400).json({error:e.message}); }
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // --- CONTACTS API ---
 app.get('/api/contacts', async (req, res) => {
   try { res.json(await Contact.find().sort({ createdAt: -1 })); }
-  catch(e) { res.status(400).json({error: e.message}); }
+  catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.post('/api/contacts', async (req, res) => {
   try { res.status(201).json(await Contact.create(req.body)); }
-  catch(e) { res.status(400).json({error: e.message}); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.put('/api/contacts/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(contact);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const contact = await Contact.findByIdAndDelete(req.params.id);
+    if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
+    res.json({ message: 'Contacto eliminado' });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 const PORT = process.env.PORT || 5000;

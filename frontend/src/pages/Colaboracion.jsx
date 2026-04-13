@@ -25,9 +25,9 @@ const Colaboracion = () => {
   const fetchData = async () => {
     try {
       const [cvsRes, instRes, tasksRes] = await Promise.all([
-        fetch('http://localhost:5000/api/cvs'),
-        fetch('http://localhost:5000/api/institutions'),
-        fetch(`http://localhost:5000/api/tasks?email=${user.email}`)
+        fetch('https://paleturquoise-stork-428174.hostingersite.com/api/cvs'),
+        fetch('https://paleturquoise-stork-428174.hostingersite.com/api/institutions'),
+        fetch(`https://paleturquoise-stork-428174.hostingersite.com/api/tasks?email=${user.email}`)
       ]);
       setCvs(await cvsRes.json());
       setInstitutions(await instRes.json());
@@ -62,7 +62,7 @@ const Colaboracion = () => {
     formData.append('document', documentFile);
 
     try {
-      const res = await fetch('http://localhost:5000/api/cvs/collab', {
+      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/cvs/collab', {
         method: 'POST',
         body: formData
       });
@@ -213,7 +213,7 @@ const Colaboracion = () => {
                             Enviaste cv a <span className="font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded mx-1">{cv.targetInstitutionId}</span> ({cv.targetVacancyId?.role || 'Puesto no especificado'}).
                           </p>
                         </div>
-                        <a href={`http://localhost:5000/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 flex items-center gap-2 shrink-0"><FileText className="w-4 h-4"/> Ver Archivo</a>
+                        <a href={`https://paleturquoise-stork-428174.hostingersite.com/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-100 flex items-center gap-2 shrink-0"><FileText className="w-4 h-4"/> Ver Archivo</a>
                       </div>
                     ))}
                   </div>

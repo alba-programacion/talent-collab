@@ -574,5 +574,9 @@ app.delete('/api/contacts/:id', async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
+app.get('/', (req, res) => {
+  res.send('Servidor de TalentCollab funcionando correctamente 🚀');
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => { console.log(`Backend de Colaboración de Talento (MVP) corriendo en http://localhost:${PORT}`); });

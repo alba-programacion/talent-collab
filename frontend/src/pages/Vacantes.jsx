@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { Briefcase, Building, Clock, Users, FileText, X, Plus, Send } from 'lucide-react';
+import { API_URL } from '../config';
+import confetti from 'canvas-confetti';
+
+const REJECTION_CODES = {
+  'A': 'NO CUMPLE CON EL PERFIL DE LA VACANTE',
+  'B': 'ESCOLARIDAD',
+  'C': 'ENTREVISTA INICIAL',
+  'D': 'EXAMEN PSICOMÉTRICO',
+  'E': 'SE CUBRIÓ LA VACANTE',
+  'F': 'DISPONIBILIDAD DE HORARIO Y/O LUGAR DE RESIDENCIA',
+  'G': 'PERIODOS INESTABLES ESCOLAR Y/O LABORAL',
+  'H': 'PERIODOS DE INACTIVIDAD',
+  'I': 'OTRO'
+};
 
 const Vacantes = () => {
   const { user } = useAuth();
@@ -12,6 +26,10 @@ const Vacantes = () => {
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedVacancy, setSelectedVacancy] = useState(null);
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectingCv, setRejectingCv] = useState(null);
+  const [rejectionCode, setrejectionCode] = useState('');
+  const [rejectionReasonCustom, setRejectionReasonCustom] = useState('');
 
   // Forms state
   const [form, setForm] = useState({ 
@@ -29,7 +47,7 @@ const Vacantes = () => {
 
   const fetchVacancies = async () => {
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/vacancies');
+      const res = await fetch(`${API_URL}/api/vacancies`);
       const data = await res.json();
       setVacancies(data);
     } catch (e) {
@@ -41,7 +59,7 @@ const Vacantes = () => {
 
   const fetchAllCvs = async () => {
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/cvs');
+      const res = await fetch(`${API_URL}/api/cvs`);
       const data = await res.json();
       const normalizedData = data.map(c => ({
         ...c,
@@ -55,12 +73,15 @@ const Vacantes = () => {
 
   const fetchInstitutions = async () => {
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/institutions');
-      const data = await res.json();
-      setInstitutions(data);
-    } catch (e) {
-      console.error(e);
-    }
+      const [resVacs, resInsts] = await Promise.all([
+        fetch(`${API_URL}/api/vacancies`),
+        fetch(`${API_URL}/api/institutions`)
+      ]);
+      const vacsData = await resVacs.json();
+      const instsData = await resInsts.json();
+      setVacancies(Array.isArray(vacsData) ? vacsData : []);
+      setInstitutions(Array.isArray(instsData) ? instsData : []);
+    } catch(e) { console.error(e) }
   };
 
   useEffect(() => {
@@ -81,7 +102,7 @@ const Vacantes = () => {
     }
 
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/vacancies', {
+      const res = await fetch(`${API_URL}/api/vacancies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, institutionId: user?.institutionId })
@@ -112,7 +133,7 @@ const Vacantes = () => {
     formData.append('document', documentFile);
 
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/cvs/vacancy', {
+      const res = await fetch(`${API_URL}/api/cvs/vacancy`, {
         method: 'POST',
         body: formData
       });
@@ -130,33 +151,57 @@ const Vacantes = () => {
     }
   };
 
-  const handleUpdateCvStatus = async (cvId, newStatus) => {
-    let rejectedReason = '';
-    let rejectedBy = '';
-    if (newStatus === 'Rechazado') {
-      rejectedReason = window.prompt("Motivo de rechazo de este candidato (obligatorio):");
-      if (!rejectedReason) return; // User cancelled
-      rejectedBy = user?.institutionName || 'Institución';
+  const handleUpdateCvStatus = async (cvId, newStatus, extraData = {}) => {
+    if (newStatus === 'Rechazado' && !extraData.rejectionCode) {
+      setRejectingCv(cvId);
+      setShowRejectionModal(true);
+      return;
+    }
+
+    if (newStatus === 'Aceptado') {
+      confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#2563eb', '#4f46e5', '#10b981']
+      });
     }
 
     try {
-      const res = await fetch(`https://paleturquoise-stork-428174.hostingersite.com/api/cvs/${cvId}/status`, {
+      const body = { status: newStatus, rejectedBy: user?.institutionName || 'Institución', ...extraData };
+      const res = await fetch(`${API_URL}/api/cvs/${cvId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, rejectedReason, rejectedBy })
+        body: JSON.stringify(body)
       });
       if (!res.ok) throw new Error('Error al actualizar status');
+      
       fetchAllCvs(); // refresh the list
       
       if (newStatus === 'Rechazado') {
-         setSelectedVacancy(prev => ({...prev, cvCount: prev.cvCount - 1}));
+         setSelectedVacancy(prev => prev ? ({...prev, cvCount: prev.cvCount - 1}) : null);
+         setShowRejectionModal(false);
+         setRejectingCv(null);
+         setrejectionCode('');
+         setRejectionReasonCustom('');
       }
     } catch(err) { alert(err.message) }
   };
 
+  const handleConfirmRejection = (e) => {
+    e.preventDefault();
+    if (!rejectionCode) return alert("Selecciona una clave de rechazo");
+    if (rejectionCode === 'I' && !rejectionReasonCustom.trim()) return alert("Favor de especificar el motivo");
+    
+    handleUpdateCvStatus(rejectingCv, 'Rechazado', { 
+      rejectionCode, 
+      rejectionReasonCustom: rejectionCode === 'I' ? rejectionReasonCustom : '' 
+    });
+  };
+
   const handleUpdateVacancyStatus = async (vacancyId, newStatus) => {
     try {
-      const res = await fetch(`https://paleturquoise-stork-428174.hostingersite.com/api/vacancies/${vacancyId}/status`, {
+      const res = await fetch(`${API_URL}/api/vacancies/${vacancyId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus })
@@ -172,7 +217,7 @@ const Vacantes = () => {
   const handleDeleteVacancy = async (vacancyId) => {
     if (!window.confirm("¿Estás seguro de que deseas eliminar esta vacante de forma permanente?")) return;
     try {
-      const res = await fetch(`https://paleturquoise-stork-428174.hostingersite.com/api/vacancies/${vacancyId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/vacancies/${vacancyId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar');
       fetchVacancies();
       if (selectedVacancy && selectedVacancy.id === vacancyId) setSelectedVacancy(null);
@@ -185,7 +230,7 @@ const Vacantes = () => {
     if (!requestCvForm.targetInstitutionId) return setError('Selecciona una institución válida.');
 
     try {
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/tasks/request-cv', {
+      const res = await fetch(`${API_URL}/api/tasks/request-cv`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -227,7 +272,7 @@ const Vacantes = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Red de Vacantes</h1>
           <p className="text-slate-500 dark:text-slate-400">Explora las posiciones abiertas en las instituciones asociadas.</p>
         </div>
-        {(user?.role === 'user' || user?.role === 'management' || user?.role === 'admin') && (
+        {(user?.role === 'universidad' || user?.role === 'management' || user?.role === 'admin') && (
           <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
             <Plus className="w-5 h-5" /> Nueva Vacante
           </button>
@@ -486,26 +531,27 @@ const Vacantes = () => {
                       <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><Send className="w-5 h-5 text-indigo-500"/> Candidatos Postulados ({selectedVacancy.cvCount})</h3>
                     </div>
                     <div className="p-6 flex flex-col gap-3">
-                      {/* CONTRATADOS */}
-                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length > 0 && (
+                      {/* ACEPTADOS */}
+                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Aceptado').length > 0 && (
                         <div className="mb-4">
-                          <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 border-b border-emerald-100 dark:border-emerald-900/50 pb-2">Talento Contratado! 🎉</h4>
-                          {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').map(cv => (
+                          <h4 className="text-sm font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-3 border-b border-emerald-100 dark:border-emerald-900/50 pb-2">Talento Aceptado! 🎉</h4>
+                          {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Aceptado').map(cv => (
                             <div key={cv.id} className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-800/50 rounded-xl flex flex-col gap-2 mb-2">
                               <div className="flex justify-between items-start">
                                 <div className="font-bold text-slate-900 dark:text-white text-lg flex items-center gap-2">
                                   {cv.name}
                                   <select 
-                                    value={cv.status} 
+                                    value={cv.status || ''} 
                                     onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
                                     className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-emerald-100 text-emerald-700 border-emerald-200"
                                   >
-                                    <option value="Disponible">Disponible</option>
-                                    <option value="En Proceso">En Proceso</option>
-                                    <option value="Contratado">Contratado</option>
+                                    <option value="Aceptado">Aceptado</option>
+                                    <option value="En Proceso">En trámite</option>
+                                    <option value="Cartera">Cartera</option>
+                                    <option value="Rechazado">Rechazado</option>
                                   </select>
                                 </div>
-                                <a href={`https://paleturquoise-stork-428174.hostingersite.com/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:underline">
+                                <a href={`${API_URL}/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-600 text-sm font-semibold hover:underline">
                                   <FileText className="w-4 h-4"/> Ver CV
                                 </a>
                               </div>
@@ -519,24 +565,25 @@ const Vacantes = () => {
                       )}
 
                       {/* ACTIVOS */}
-                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length === 0 && allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Contratado').length === 0 ? (
-                        <div className="text-center py-6 text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl">No hay candidatos postulados currently.</div>
+                      {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Aceptado').length === 0 && allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status === 'Aceptado').length === 0 ? (
+                        <div className="text-center py-6 text-slate-500 bg-slate-50 dark:bg-slate-800/50 rounded-xl">No hay candidatos postulados actualmente.</div>
                       ) : (
                       <div className="space-y-3">
-                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').length > 0 && <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-slate-100 dark:border-slate-800 pb-2">Candidatos Activos</h4>}
-                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Contratado').map(cv => (
+                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Aceptado').length > 0 && <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-1 border-b border-slate-100 dark:border-slate-800 pb-2">Candidatos Activos</h4>}
+                        {allCvs.filter(c => c.targetVacancyId === selectedVacancy.id && c.status !== 'Aceptado').map(cv => (
                           <div key={cv.id} className="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex items-center justify-between hover:border-blue-400 transition-colors shadow-sm">
                             <div>
                               <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                 {cv.name}
                                 <select 
-                                  value={cv.status} 
+                                  value={cv.status || ''} 
                                   onChange={(e) => handleUpdateCvStatus(cv.id, e.target.value)}
-                                  className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity bg-indigo-100 text-indigo-700 border-indigo-200`}
+                                  className={`text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full font-black outline-none border cursor-pointer hover:opacity-80 transition-opacity ${cv.status === 'Aceptado' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-indigo-100 text-indigo-700 border-indigo-200'}`}
                                 >
-                                  <option value="Disponible">Disponible</option>
-                                  <option value="En Proceso">En Proceso</option>
-                                  <option value="Contratado">Contratado</option>
+                                  <option value="En Proceso">En trámite</option>
+                                  <option value="Aceptado">Aceptado</option>
+                                  <option value="Cartera">Cartera</option>
+                                  <option value="Rechazado">Rechazado</option>
                                 </select>
                               </div>
                               <div className="text-xs text-slate-500 mt-2 flex flex-col sm:flex-row sm:items-center gap-2 font-medium">
@@ -544,7 +591,7 @@ const Vacantes = () => {
                                 <span className="text-slate-400">Publicado: {new Date(cv.createdAt).toLocaleDateString()}</span>
                               </div>
                             </div>
-                            <a href={`https://paleturquoise-stork-428174.hostingersite.com/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-700 p-2 rounded-lg hover:bg-indigo-100 transition-colors ring-1 ring-inset ring-indigo-200">
+                            <a href={`${API_URL}/uploads/${cv.document}`} target="_blank" rel="noopener noreferrer" className="bg-indigo-50 text-indigo-700 p-2 rounded-lg hover:bg-indigo-100 transition-colors ring-1 ring-inset ring-indigo-200">
                               <FileText className="w-5 h-5"/>
                             </a>
                           </div>
@@ -636,6 +683,63 @@ const Vacantes = () => {
 
             </div>
            </div>
+        </div>
+      )}
+      {/* Rejection Reasons Modal */}
+      {showRejectionModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in" onClick={() => setShowRejectionModal(false)}>
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden glass-panel" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold dark:text-white">Claves de Rechazo</h3>
+              <button onClick={() => setShowRejectionModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleConfirmRejection} className="p-6 space-y-4">
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                {Object.entries(REJECTION_CODES).map(([code, label]) => (
+                  <label key={code} className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group">
+                    <input 
+                      type="radio" 
+                      name="rejectionCode" 
+                      value={code} 
+                      checked={rejectionCode === code}
+                      onChange={(e) => setrejectionCode(e.target.value)}
+                      className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500 border-slate-300 rounded-full" 
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-red-600 dark:text-red-400">Código {code}</span>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white">{label}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              {rejectionCode === 'I' && (
+                <div className="animate-in slide-in-from-top-2 duration-300">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Especifique motivo</label>
+                  <textarea 
+                    value={rejectionReasonCustom}
+                    onChange={(e) => setRejectionReasonCustom(e.target.value)}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none dark:text-white text-sm resize-none"
+                    rows="3"
+                    placeholder="Escriba aquí el motivo detallado..."
+                    required
+                  ></textarea>
+                </div>
+              )}
+
+              <div className="pt-2">
+                <button 
+                  type="submit" 
+                  className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-2xl font-bold shadow-lg shadow-red-500/30 transition-all flex items-center justify-center gap-2"
+                >
+                  Confirmar Rechazo y Archivar
+                </button>
+                <p className="text-[10px] text-center text-slate-400 mt-4 leading-normal">
+                  Al confirmar, el perfil será movido a "Gestión de CVs" y se programará su eliminación automática en 30 días.
+                </p>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

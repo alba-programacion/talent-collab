@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
+import { API_URL } from '../config';
 import { Briefcase, Building, FileText, Clock, AlertCircle, PieChart, BarChart2, TrendingUp, Users } from 'lucide-react';
 
 const Dashboard = () => {
@@ -20,7 +21,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/metrics');
+        const res = await fetch(`${API_URL}/api/metrics`);
         const data = await res.json();
         // Defensive: preserve structure if backend is missing fields or returning an error
         setMetrics(prev => ({
@@ -47,7 +48,7 @@ const Dashboard = () => {
     { title: 'Total Vacantes', value: metrics?.totalVacancies || 0, icon: Briefcase, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
     { title: 'Instituciones Red', value: metrics?.totalInstitutions || 0, icon: Building, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
     { title: 'CVs Totales', value: metrics?.totalCvs || 0, icon: FileText, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
-    { title: 'CVs en Proceso', value: metrics?.cvsInProcess || 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+    { title: 'CVs en trámite', value: metrics?.cvsInProcess || 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
   ];
 
   const requestStats = metrics?.requestStats || { requested: 0, sent: 0, open: 0 };
@@ -65,19 +66,21 @@ const Dashboard = () => {
         </div>
         <div className="hidden md:block text-right">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Estatus del Operador</p>
-          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-xs font-bold ring-1 ring-emerald-500/20">Administrador Global</span>
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-full text-xs font-bold ring-1 ring-emerald-500/20">
+            {user?.role === 'admin' ? 'Administrador Global' : user?.role === 'universidad' ? 'Universidad' : 'Coordinador'}
+          </span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat, idx) => (
           <div key={idx} className="glass-panel p-6 rounded-3xl flex items-center gap-5 transition-all hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 group">
-            <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300`}>
-              <stat.icon className="w-8 h-8" />
+            <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300 flex-shrink-0`}>
+              <stat.icon className="w-6 h-6" />
             </div>
-            <div>
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">{stat.title}</p>
-              <h3 className="text-3xl font-black text-slate-900 dark:text-white leading-none">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] leading-tight font-black text-slate-400 uppercase mb-1 break-words">{stat.title}</p>
+              <h3 className="text-2xl font-black text-slate-900 dark:text-white leading-none">
                 {loading ? <span className="animate-pulse bg-slate-200 dark:bg-slate-700 h-8 w-12 block rounded mt-1"></span> : (stat.value || 0)}
               </h3>
             </div>
@@ -91,11 +94,11 @@ const Dashboard = () => {
         
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
            <div>
-             <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Users className="text-indigo-500 w-5 h-5"/> Candidatos en Proceso de Colaboración</h3>
+             <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><Users className="text-indigo-500 w-5 h-5"/> Candidatos en trámite de Colaboración</h3>
              <p className="text-sm text-slate-500 font-medium">Desglose detallado de talento activo vinculando origen y destino.</p>
            </div>
            <div className="px-4 py-2 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400 rounded-xl text-xs font-bold flex items-center gap-2">
-             <TrendingUp className="w-4 h-4" /> {cvsInProcessList.length} Candidatos activos
+             <TrendingUp className="w-4 h-4" /> {cvsInProcessList.length} Candidatos en trámite
            </div>
         </div>
 
@@ -133,7 +136,7 @@ const Dashboard = () => {
               ))}
               {cvsInProcessList.length === 0 && (
                 <tr>
-                  <td colSpan="4" className="py-12 text-center text-slate-400 font-medium italic">No hay candidatos actualmente en proceso.</td>
+                  <td colSpan="4" className="py-12 text-center text-slate-400 font-medium italic">No hay candidatos actualmente en trámite.</td>
                 </tr>
               )}
             </tbody>

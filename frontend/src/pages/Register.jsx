@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { UserPlus, Mail, Lock, Building, Briefcase, Plus, X, ArrowLeft } from 'lucide-react';
+import { API_URL } from '../config';
+import logoAMIB from '../assets/logoamib.jpg';
 
 const Register = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user');
+  const [role, setRole] = useState('universidad');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [institutionId, setInstitutionId] = useState('');
@@ -15,7 +18,7 @@ const Register = () => {
   const [institutions, setInstitutions] = useState([]);
 
   useEffect(() => {
-    fetch('https://paleturquoise-stork-428174.hostingersite.com/api/institutions')
+    fetch(`${API_URL}/api/institutions`)
       .then(res => res.json())
       .then(data => setInstitutions(data))
       .catch(console.error);
@@ -39,7 +42,7 @@ const Register = () => {
         newInstitutionProfile: institutionId === 'NEW' ? newInstProfile : ''
       };
 
-      const res = await fetch('https://paleturquoise-stork-428174.hostingersite.com/api/auth/register', {
+      const res = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -62,6 +65,11 @@ const Register = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
       <div className="glass-panel max-w-md w-full p-8 rounded-3xl animate-fade-in shadow-xl">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-6">
+            <div className="bg-white p-1 rounded-full shadow-lg border border-slate-100 h-32 w-32 flex items-center justify-center overflow-hidden">
+               <img src={logoAMIB} alt="AMIB Logo" className="h-full w-full object-contain" />
+            </div>
+          </div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 mb-2">TalentCollab</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Crear cuenta nueva</p>
         </div>
@@ -113,7 +121,7 @@ const Register = () => {
               }}
               className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
             >
-              <option value="user">Usuario Reclutador (Estándar)</option>
+              <option value="universidad">Universidad</option>
               <option value="management">Gerente / Coordinador</option>
               <option value="admin">Administrador Global del Sistema</option>
             </select>

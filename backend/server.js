@@ -11,6 +11,7 @@ const Institution = require('./models/Institution');
 const Vacancy = require('./models/Vacancy');
 const CV = require('./models/CV');
 const Task = require('./models/Task');
+const Notification = require('./models/Notification');
 const Contact = require('./models/Contact');
 
 const app = express();
@@ -38,6 +39,18 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/talent-co
       ]);
       console.log('🌱 Seeded Institutions');
     }
+    // Migration: user -> universidad
+    await User.updateMany({ role: 'user' }, { role: 'universidad' });
+    
+    // Migration: CV Statuses
+    await CV.updateMany({ status: 'Disponible' }, { status: null });
+    await CV.updateMany({ status: 'En Proceso' }, { status: 'En trámite' });
+    await CV.updateMany({ status: { $in: ['Aprobado', 'Contratado'] } }, { status: 'Aceptado' });
+    
+    // Ensure TTL Index for auto-deletion of rejected CVs
+    await CV.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    
+    console.log('🔄 Applied migrations and verified indices');
   })
   .catch((err) => console.error('❌ Failed to connect to MongoDB:', err));
 
@@ -48,7 +61,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const MOCK_USERS = [
   { id: 1, email: 'admin@system.com', password: 'password', role: 'admin', institutionId: null },
   { id: 2, email: 'manager@inst-a.com', password: 'password', role: 'management', institutionId: 'A' },
-  { id: 3, email: 'user@inst-a.com', password: 'password', role: 'user', institutionId: 'A' },
+  { id: 3, email: 'user@inst-a.com', password: 'password', role: 'universidad', institutionId: 'A' },
   { id: 4, email: 'manager@inst-b.com', password: 'password', role: 'management', institutionId: 'B' },
 ];
 
@@ -60,7 +73,7 @@ app.post('/api/auth/register', async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: 'Este correo ya se encuentra registrado.' });
 
-    const finalRole = role && ['user', 'management', 'admin'].includes(role) ? role : 'user';
+    const finalRole = role && ['universidad', 'management', 'admin'].includes(role) ? role : 'universidad';
     let finalInstId = institutionId;
 
     if (!institutionId && newInstitutionName) {
@@ -91,9 +104,11 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(`[LOGIN ATTEMPT] Email: ${email}`);
     const dbUser = await User.findOne({ email }).populate('institutionId');
     if (dbUser) {
       if (await dbUser.comparePassword(password)) {
+        console.log(`[LOGIN SUCCESS] Found in DB: ${email}`);
         return res.json({
           token: 'jwt-' + dbUser._id,
           user: {
@@ -110,15 +125,21 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const user = MOCK_USERS.find(u => u.email === email && u.password === password);
     if (user) {
+      console.log(`[LOGIN SUCCESS] Found in Mock Users: ${email}`);
       const { password: _, ...safeUser } = user;
       return res.json({ token: 'mock-token', user: safeUser });
     }
+    console.log(`[LOGIN FAILED] Credentials not found: ${email}`);
     res.status(401).json({ error: 'Credenciales inválidas' });
-  } catch (err) { res.status(500).json({ error: 'Error de servidor' }); }
+  } catch (err) { 
+    console.error('[LOGIN ERROR DETAILS]:', err);
+    res.status(500).json({ error: 'Error de servidor' }); 
+  }
 });
 
 app.get('/api/metrics', async (req, res) => {
   try {
+    console.log('[DEBUG metrics query]', Buffer.from('En trámite').toString('hex'));
     const [totalVacancies, totalInstitutions, totalCvs, cvsInProcess] = await Promise.all([
       Vacancy.countDocuments(),
       Institution.countDocuments(),
@@ -172,7 +193,7 @@ app.get('/api/metrics', async (req, res) => {
       };
     });
 
-    // 5. Candidates In Process List (Name, Vacancy, Institution)
+    // 5. Candidates In Train List (Name, Vacancy, Institution)
     const inProcessCvs = await CV.find({ status: 'En Proceso' })
       .populate({
         path: 'targetVacancyId',
@@ -215,6 +236,47 @@ app.post('/api/institutions', upload.single('logo'), async (req, res) => {
     const inst = await Institution.create({ _id, name, profile, logo: logoStr });
     res.status(201).json(inst);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.delete('/api/institutions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`[DELETE INSTITUTION ATTEMPT] ID: ${id}`);
+    const inst = await Institution.findById(id);
+    if (!inst) {
+      console.log(`[DELETE FAILED] Institution not found: ${id}`);
+      return res.status(404).json({ error: 'Institución no encontrada' });
+    }
+
+    // CASCADE DELETE:
+    console.log(`[DELETE STEP 1] Cleaning Users for: ${id}`);
+    await User.deleteMany({ institutionId: id });
+    console.log(`[DELETE STEP 2] Cleaning Vacancies for: ${id}`);
+    await Vacancy.deleteMany({ institutionId: id });
+    console.log(`[DELETE STEP 3] Cleaning CVs for: ${id}`);
+    await mongoose.model('CV').deleteMany({ sourceInstitutionId: id });
+    
+    // 4. Logo File (Optional but recommended)
+    if (inst.logo) {
+      console.log(`[DELETE STEP 4] Removing Logo: ${inst.logo}`);
+      const logoPath = path.join(__dirname, 'uploads', inst.logo);
+      if (fs.existsSync(logoPath)) {
+        try { fs.unlinkSync(logoPath); } catch(e) {} 
+      }
+    }
+
+    const result = await mongoose.connection.db.collection('institutions').deleteOne({ _id: id });
+    console.log(`[DELETE SUCCESS] Deleted count for ${id}: ${result.deletedCount}`);
+    
+    if (result.deletedCount === 0) {
+      console.log(`[DELETE WARNING] Document not found via direct collection delete: ${id}`);
+    }
+
+    res.json({ message: 'Institución y todos sus datos asociados fueron eliminados correctamente.' });
+  } catch (e) { 
+    console.error('[DELETE ERROR DETAILS]:', e);
+    res.status(500).json({ error: e.message }); 
+  }
 });
 
 app.get('/api/vacancies', async (req, res) => {
@@ -298,8 +360,20 @@ app.post('/api/cvs/vacancy', upload.single('document'), async (req, res) => {
     const cv = await CV.create({
       name, email, document: req.file.filename,
       sourceInstitutionId,
-      targetVacancyId, status: 'Disponible'
+      targetVacancyId, status: 'Cartera'
     });
+
+    // --- NOTIFICATION TARGETING ---
+    const vacancyInfo = await Vacancy.findById(targetVacancyId);
+    if (vacancyInfo && vacancyInfo.institutionId && vacancyInfo.institutionId.toString() !== sourceInstitutionId.toString()) {
+      await Notification.create({
+        targetInstitutionId: vacancyInfo.institutionId,
+        message: `¡Nueva Postulación! ${sourceInstitutionId} ha enviado a ${name} para tu vacante de ${vacancyInfo.role}.`,
+        type: 'SUCCESS',
+        link: '/vacantes'
+      });
+    }
+
     res.status(201).json({ cv });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -317,7 +391,7 @@ app.post('/api/cvs/collab', upload.single('document'), async (req, res) => {
       name, email, document: req.file.filename,
       sourceInstitutionId,
       targetInstitutionId: targetEmail, // Save destination email for tracking rendering
-      status: 'En Proceso'
+      status: 'Cartera'
     });
 
     // SLA Date processing
@@ -352,35 +426,49 @@ app.post('/api/cvs/:id/share', async (req, res) => {
 app.patch('/api/cvs/:id/status', async (req, res) => {
   try {
     const cv = await CV.findById(req.params.id);
-    const { status, rejectedReason, rejectedBy, targetVacancyId } = req.body;
+    const { status, rejectionCode, rejectionReasonCustom, rejectedBy, targetVacancyId } = req.body;
+    
     cv.status = status;
 
     let historyAction = `Cambiado a ${status}`;
+    
     if (status === 'Rechazado') {
       historyAction = 'Rechazado';
-      cv.rejectedReason = rejectedReason;
+      cv.rejectionCode = rejectionCode;
+      cv.rejectionReasonCustom = rejectionReasonCustom;
       if (rejectedBy) cv.rejectedBy = rejectedBy;
+      
+      // Auto-delete in 30 days
+      cv.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      
+      // Unlink from vacancy so it moves to global pool (Gestion de CVs)
       cv.targetVacancyId = null;
-    } else if (status === 'Aprobado' || status === 'Contratado') {
-      historyAction = 'Aprobado';
-      if (targetVacancyId !== undefined) {
-        cv.targetVacancyId = targetVacancyId || null;
+    } else {
+      // Clear rejection data if status changes back to something else
+      cv.rejectionCode = null;
+      cv.rejectionReasonCustom = null;
+      cv.expiresAt = null;
+      
+      if (status === 'Aceptado') {
+        historyAction = 'Aceptado para la vacante';
+        if (targetVacancyId !== undefined) {
+          cv.targetVacancyId = targetVacancyId || null;
+        }
       }
     }
 
     cv.history.push({
       action: historyAction,
-      details: status === 'Rechazado' ? rejectedReason : 'El perfil ha avanzado en el proceso'
+      details: status === 'Rechazado' ? `Rechazo con código ${rejectionCode}` : 'Estado actualizado'
     });
 
     await cv.save();
 
-    // AUTO-NOTA: Si el CV venía de una institución diferente (collaboración), envíar una tarea de vuelta como Notificación
-    if ((status === 'Rechazado' || status === 'Aprobado' || status === 'Contratado') && cv.sourceInstitutionId) {
+    // Auto-notification for collaboration
+    if ((status === 'Rechazado' || status === 'Aceptado') && cv.sourceInstitutionId) {
       let sourceManager = await User.findOne({ institutionId: cv.sourceInstitutionId, role: { $in: ['management', 'admin'] } });
       if (!sourceManager) sourceManager = await User.findOne({ institutionId: cv.sourceInstitutionId });
-      if (!sourceManager) sourceManager = MOCK_USERS.find(u => u.institutionId === cv.sourceInstitutionId);
-
+      
       if (sourceManager) {
         await Task.create({
           type: 'REVIEW_CV',
@@ -440,6 +528,24 @@ app.post('/api/tasks/request-cv', async (req, res) => {
       description: description || 'Por favor revisa sus CVs y postula candidatos a esta vacante.',
       dueDate: finalDueDate
     });
+
+    try {
+      const vacancyInfo = await Vacancy.findById(targetVacancyId);
+      let senderInstitutionName = 'Alguien de otra institución';
+      const senderUser = await User.findOne({ email: senderEmail });
+      if (senderUser && senderUser.institutionId) {
+        senderInstitutionName = senderUser.institutionId; // We store Name or ID directly in institutionId mostly. Wait, senderUser.institutionId is usually the String ID. 
+        // We can just use the ID if we don't feel like querying the Collection.
+      }
+      
+      await Notification.create({
+        targetInstitutionId,
+        message: `¡Nueva Solicitud SLA! ${senderInstitutionName} te ha solicitado CVs para la vacante "${vacancyInfo?.role || 'general'}".`,
+        type: 'INFO',
+        link: '/tareas'
+      });
+    } catch(err) { console.error('Error creating task notification', err); }
+
     res.status(201).json(task);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -530,6 +636,22 @@ app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res
     task.status = 'COMPLETED';
     await task.save();
 
+    // --- NOTIFICATION TARGETING ---
+    if (targetInstId && targetInstId.toString() !== sourceInstitutionId.toString()) {
+      await Notification.create({
+        targetInstitutionId: targetInstId,
+        message: `¡SLA Cumplido! ${sourceInstitutionId} te ha enviado un CV (${name}) que solicitaste.`,
+        type: 'SUCCESS',
+        link: '/tareas'
+      });
+    }
+    await Notification.create({
+      targetInstitutionId: sourceInstitutionId,
+      message: `Has enviado el CV de ${name} exitosamente a ${targetInstId || 'la institución destino'}.`,
+      type: 'INFO',
+      link: '/tareas'
+    });
+
     res.status(201).json({ cv, task });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -572,6 +694,27 @@ app.delete('/api/contacts/:id', async (req, res) => {
     if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
     res.json({ message: 'Contacto eliminado' });
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// --- NOTIFICATIONS API ---
+app.get('/api/notifications/:institutionId', async (req, res) => {
+  try {
+    const notifs = await Notification.find({ targetInstitutionId: req.params.institutionId }).sort({ createdAt: -1 }).limit(30);
+    res.json(notifs);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.patch('/api/notifications/:id/read', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Falta userId' });
+    
+    // Add userId to readBy array if not already present
+    await Notification.findByIdAndUpdate(req.params.id, {
+      $addToSet: { readBy: userId }
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/', (req, res) => {

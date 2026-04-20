@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../App';
+import logoAMIB from '../assets/logoamib.jpg';
 
 const Login = () => {
   const { login } = useAuth();
@@ -28,6 +29,11 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4">
       <div className="glass-panel max-w-md w-full p-8 rounded-3xl animate-fade-in shadow-xl">
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-6">
+            <div className="bg-white p-1 rounded-full shadow-lg border border-slate-100 h-32 w-32 flex items-center justify-center overflow-hidden">
+               <img src={logoAMIB} alt="AMIB Logo" className="h-full w-full object-contain" />
+            </div>
+          </div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 mb-2">TalentCollab</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Sistema de Colaboración Inter-Institucional</p>
         </div>
@@ -80,7 +86,7 @@ const Login = () => {
               <span className="font-semibold text-indigo-600 dark:text-indigo-400">Management (A)</span> <span className="text-xs">manager@inst-a.com</span>
             </button>
             <button onClick={() => quickLogin('user@inst-a.com')} className="px-4 py-2 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-sm transition-colors text-slate-700 dark:text-slate-300 flex justify-between items-center border border-slate-200 dark:border-slate-700/50">
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Usuario (A)</span> <span className="text-xs">user@inst-a.com</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Universidad (A)</span> <span className="text-xs">user@inst-a.com</span>
             </button>
           </div>
         </div>

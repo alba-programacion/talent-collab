@@ -7,8 +7,10 @@ const cvSchema = new mongoose.Schema({
   sourceInstitutionId: { type: String, ref: 'Institution' },
   targetInstitutionId: { type: String },
   targetVacancyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vacancy' },
-  status: { type: String, default: 'Disponible' }, // Disponible, En Proceso, Aprobado, Rechazado, Pausado
-  rejectedReason: { type: String, default: '' },
+  status: { type: String, enum: ['Aceptado', 'En Proceso', 'Cartera', 'Rechazado', 'En trámite', null], default: null },
+  rejectionCode: { type: String, default: null },
+  rejectionReasonCustom: { type: String, default: null },
+  expiresAt: { type: Date, default: null },
   rejectedBy: { type: String, default: '' },
   history: [{
     action: { type: String },

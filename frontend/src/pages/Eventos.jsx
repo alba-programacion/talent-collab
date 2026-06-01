@@ -220,7 +220,7 @@ const Eventos = () => {
                     ).
                   </p>
                   
-                  {canEdit && (
+                  {user?.role === 'admin' && (
                     <div className="mt-3">
                       <button
                         type="button"

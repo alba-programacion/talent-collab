@@ -16,6 +16,9 @@ const Eventos = () => {
   const [editDescription, setEditDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  
+  // Committee manual reminder state
+  const [sendingReminder, setSendingReminder] = useState(false);
 
   // Dynamically calculate committees: first Tuesday of each month for the next 12 months
   const getUpcomingCommittees = () => {
@@ -123,6 +126,28 @@ const Eventos = () => {
     }
   };
 
+  const handleSendManualReminder = async () => {
+    setSendingReminder(true);
+    setError('');
+    setSuccess('');
+    try {
+      const res = await fetch(`${API_URL}/api/events/comite/reminder`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        setSuccess('Recordatorio manual de comité enviado exitosamente por correo a todos los usuarios.');
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Error al enviar el recordatorio manual.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Error al comunicarse con el servidor.');
+    } finally {
+      setSendingReminder(false);
+    }
+  };
+
   const canEdit = user?.role === 'admin' || user?.role === 'management';
 
   return (
@@ -194,6 +219,26 @@ const Eventos = () => {
                     </span>
                     ).
                   </p>
+                  
+                  {canEdit && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={handleSendManualReminder}
+                        disabled={sendingReminder}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-755 disabled:bg-indigo-400 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-500/25 flex items-center gap-2"
+                      >
+                        {sendingReminder ? (
+                          <>
+                            <span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                            Enviando Recordatorio...
+                          </>
+                        ) : (
+                          'Enviar Recordatorio Manual por Correo'
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -248,8 +293,9 @@ const Eventos = () => {
 
       {activeTab === 'feria' && (
         <div className="max-w-3xl mx-auto">
+          {/* Notification Messages */}
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm mb-4 border border-red-200 dark:border-red-800/50 flex items-center gap-2">
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm mb-4 border border-red-200 dark:border-red-800/50 flex items-center gap-2 animate-shake">
               <AlertCircle className="w-5 h-5" /> {error}
             </div>
           )}
@@ -263,7 +309,7 @@ const Eventos = () => {
           {isEditing && canEdit ? (
             /* Editing Form */
             <form onSubmit={handleSaveFeria} className="glass-panel p-6 rounded-3xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/50 dark:border-slate-800/50 space-y-6 shadow-xl">
-              <h3 className="font-black text-xl text-slate-800 dark:text-white">Editar Feria del Libro</h3>
+              <h3 className="font-black text-xl text-slate-800 dark:text-white">{(!feriaData.description && !feriaData.image) ? 'Crear Evento de Feria del Libro' : 'Editar Feria del Libro'}</h3>
               
               <div className="space-y-2">
                 <label className="block text-sm font-bold text-slate-700 dark:text-slate-350">Descripción de qué trata el evento</label>
@@ -344,7 +390,7 @@ const Eventos = () => {
                     onClick={() => setIsEditing(true)}
                     className="p-2.5 rounded-xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm flex items-center gap-2 text-sm font-bold"
                   >
-                    <Edit className="w-4 h-4" /> Editar Evento
+                    <Edit className="w-4 h-4" /> {(!feriaData.description && !feriaData.image) ? 'Crear Evento' : 'Editar Evento'}
                   </button>
                 )}
               </div>

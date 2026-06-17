@@ -69,8 +69,17 @@ const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
   };
 
+  const updateUser = (newUserData) => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, ...newUserData };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, theme, toggleTheme }}>
+    <AuthContext.Provider value={{ user, login, logout, theme, toggleTheme, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

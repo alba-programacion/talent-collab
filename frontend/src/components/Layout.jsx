@@ -1,17 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, Building, Users, FileText, CheckSquare, LogOut, Menu, Book, Bell, Check, Sun, Moon, Calendar } from 'lucide-react';
+import { LayoutDashboard, Briefcase, Building, Users, FileText, CheckSquare, LogOut, Menu, Book, Bell, Check, Sun, Moon, Calendar, Camera } from 'lucide-react';
 import { useAuth } from '../App';
 import { API_URL } from '../config';
 import logoAMIB from '../assets/logoamib.jpg';
 
 const Layout = ({ children }) => {
-  const { user, logout, theme, toggleTheme } = useAuth();
+  const { user, logout, theme, toggleTheme, updateUser } = useAuth();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleLogoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('logo', file);
+
+    try {
+      const res = await fetch(`${API_URL}/api/institutions/${user.institutionId}/logo`, {
+        method: 'PATCH',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        updateUser({ institutionLogo: data.logo });
+        alert('Logo de la institución actualizado correctamente.');
+      } else {
+        const errData = await res.json();
+        alert(`Error al subir el logo: ${errData.error || 'Intente de nuevo'}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión al subir el logo.');
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const [notifications, setNotifications] = useState([]);
@@ -131,9 +163,40 @@ const Layout = ({ children }) => {
       <aside className="w-64 glass-panel flex flex-col m-4 rounded-2xl overflow-hidden shadow-lg border border-slate-200 dark:border-slate-800 hidden md:flex">
         <div className="p-6 text-center border-b border-slate-200 dark:border-slate-800">
           <div className="mb-4 flex justify-center">
-            <div className="bg-white p-1 rounded-full shadow-md border border-slate-100 h-32 w-32 flex items-center justify-center overflow-hidden">
-              <img src={logoAMIB} alt="AMIB Logo" className="h-full w-full object-contain scale-135" />
-            </div>
+            {user?.role === 'management' ? (
+              <div 
+                onClick={() => !isUploading && fileInputRef.current?.click()}
+                className="group relative cursor-pointer overflow-hidden rounded-full h-32 w-32 shadow-md border border-slate-100 flex items-center justify-center bg-white"
+                title="Haga clic para cambiar el logo de la institución"
+              >
+                <img 
+                  src={user?.institutionLogo ? `${API_URL}/uploads/${user.institutionLogo}` : logoAMIB} 
+                  alt="Logo" 
+                  className="h-full w-full object-contain scale-135 transition-transform duration-300 group-hover:scale-110" 
+                />
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <Camera className="w-6 h-6 text-white mb-1 animate-bounce" />
+                  <span className="text-[9px] font-extrabold text-white uppercase tracking-wider">
+                    {isUploading ? 'Subiendo...' : 'Cambiar logo'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-1 rounded-full shadow-md border border-slate-100 h-32 w-32 flex items-center justify-center overflow-hidden">
+                <img 
+                  src={user?.institutionLogo ? `${API_URL}/uploads/${user.institutionLogo}` : logoAMIB} 
+                  alt="Logo" 
+                  className="h-full w-full object-contain scale-135" 
+                />
+              </div>
+            )}
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              className="hidden" 
+              accept="image/*" 
+              onChange={handleLogoChange} 
+            />
           </div>
           <h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600">
             Intercambio de Talento
@@ -192,7 +255,11 @@ const Layout = ({ children }) => {
         <div className="flex md:hidden items-center justify-between mb-6 glass-panel p-4 rounded-xl shadow-sm bg-white/80 dark:bg-slate-900/80 border border-slate-200/50 dark:border-slate-800/50">
           <div className="flex items-center gap-3">
             <div className="bg-white p-0.5 rounded-full h-18 w-18 flex items-center justify-center overflow-hidden border border-slate-100 shadow-sm">
-              <img src={logoAMIB} alt="AMIB Logo" className="h-full w-full object-contain scale-135" />
+              <img 
+                src={user?.institutionLogo ? `${API_URL}/uploads/${user.institutionLogo}` : logoAMIB} 
+                alt="Logo" 
+                className="h-full w-full object-contain scale-135" 
+              />
             </div>
             <div>
               <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 leading-none">Intercambio de Talento</span>

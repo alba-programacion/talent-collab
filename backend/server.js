@@ -378,7 +378,8 @@ app.post('/api/auth/login', async (req, res) => {
             email: dbUser.email,
             role: dbUser.role,
             institutionId: dbUser.institutionId?._id || dbUser.institutionId,
-            institutionName: dbUser.institutionId?.name || 'Administración Central'
+            institutionName: dbUser.institutionId?.name || 'Administración Central',
+            institutionLogo: dbUser.institutionId?.logo || null
           }
         });
       }
@@ -642,6 +643,39 @@ app.post('/api/institutions', upload.single('logo'), async (req, res) => {
     });
     res.status(201).json(inst);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+app.patch('/api/institutions/:id/logo', upload.single('logo'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const inst = await Institution.findById(id);
+    if (!inst) {
+      return res.status(404).json({ error: 'Institución no encontrada' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No se subió ningún archivo' });
+    }
+
+    // Optional: Delete old logo from local disk if it exists
+    if (inst.logo) {
+      const oldPath = path.join(__dirname, 'uploads', inst.logo);
+      if (fs.existsSync(oldPath)) {
+        try { fs.unlinkSync(oldPath); } catch (e) { console.error('[LOGO] Error deleting old logo file:', e); }
+      }
+    }
+
+    const fileInfo = getFileData(req.file);
+    inst.logo = req.file.filename;
+    inst.logoData = fileInfo.data;
+    inst.logoMimetype = fileInfo.mimetype;
+
+    await inst.save();
+    res.json({ message: 'Logo actualizado exitosamente', logo: inst.logo });
+  } catch (error) {
+    console.error('[LOGO ERROR] Failed to update logo:', error);
+    res.status(500).json({ error: 'Error al actualizar el logo' });
+  }
 });
 
 app.delete('/api/institutions/:id', async (req, res) => {

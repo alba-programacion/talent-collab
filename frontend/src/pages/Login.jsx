@@ -29,12 +29,12 @@ const Login = () => {
     setError('');
     setMessage('');
     setLoading(true);
-    const success = await login(email, password);
+    const result = await login(email, password);
     setLoading(false);
-    if (success) {
+    if (result.success) {
       navigate('/dashboard');
     } else {
-      setError('Credenciales inválidas. Intenta de nuevo.');
+      setError(result.error || 'Credenciales inválidas. Intenta de nuevo.');
     }
   };
 
@@ -116,8 +116,16 @@ const Login = () => {
   };
 
   const quickLogin = async (roleEmail) => {
-    const success = await login(roleEmail, 'password');
-    if (success) navigate('/dashboard');
+    setError('');
+    setMessage('');
+    setLoading(true);
+    const result = await login(roleEmail, 'password');
+    setLoading(false);
+    if (result.success) {
+      navigate('/dashboard');
+    } else {
+      setError(result.error || 'Credenciales inválidas');
+    }
   };
 
   return (
@@ -336,6 +344,8 @@ const Login = () => {
             </button>
           </form>
         )}
+
+
       </div>
     </div>
   );

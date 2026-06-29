@@ -19,6 +19,12 @@ const Register = () => {
   const [newInstProfile, setNewInstProfile] = useState('');
   const [institutions, setInstitutions] = useState([]);
 
+  // Verification states
+  const [showVerification, setShowVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [message, setMessage] = useState('');
+
   useEffect(() => {
     fetch(`${API_URL}/api/institutions`)
       .then(res => res.json())
@@ -29,6 +35,7 @@ const Register = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setMessage('');
     setLoading(true);
 
     try {
@@ -51,13 +58,50 @@ const Register = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        navigate('/login');
+        if (data.verificationRequired) {
+          setVerificationEmail(data.email);
+          setShowVerification(true);
+          setMessage('Se ha enviado un código de seguridad de 6 dígitos a tu correo electrónico.');
+        } else {
+          navigate('/login');
+        }
       } else {
         setError(data.error || 'Error al registrar.');
       }
     } catch (err) {
       console.error(err);
       setError('No se pudo conectar al servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    if (!verificationCode || verificationCode.length !== 6) {
+      return setError('Por favor ingresa el código de 6 dígitos.');
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/auth/verify-registration`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verificationEmail, code: verificationCode })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage('¡Cuenta verificada exitosamente! Redirigiendo al inicio de sesión...');
+        setTimeout(() => {
+          navigate('/login');
+        }, 2500);
+      } else {
+        setError(data.error || 'Código incorrecto o expirado.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Error al comunicarse con el servidor.');
     } finally {
       setLoading(false);
     }
@@ -82,7 +126,9 @@ const Register = () => {
             </div>
           </div>
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 mb-2">Intercambio de Talento</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm">Crear cuenta nueva</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm">
+            {showVerification ? 'Verificación de Correo' : 'Crear cuenta nueva'}
+          </p>
         </div>
 
         {error && (
@@ -91,103 +137,147 @@ const Register = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre Completo</label>
-            <input 
-              type="text" 
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
-              required
-            />
+        {message && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 p-3 rounded-lg text-sm mb-6 text-center border border-emerald-200 dark:border-emerald-800">
+            {message}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Correo Electrónico</label>
-            <input 
-              type="email" 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contraseña</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
-              required
-            />
-          </div>
+        )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Rol a registrar</label>
-            <select 
-              value={role} 
-              onChange={e => {
-                setRole(e.target.value);
-              }}
-              className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
-            >
-              <option value="universidad">Universidad</option>
-              <option value="management">Rol institucion-usuario</option>
-              <option value="admin">Administrador Global del Sistema</option>
-            </select>
-          </div>
-
-          <div className="space-y-4">
+        {!showVerification ? (
+          <form onSubmit={handleSubmit} className="space-y-4 mb-6">
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Institución a la que perteneces</label>
-              <select 
-                value={institutionId} 
-                onChange={e => setInstitutionId(e.target.value)}
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre Completo</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
                 required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Correo Electrónico</label>
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contraseña</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Rol a registrar</label>
+              <select 
+                value={role} 
+                onChange={e => {
+                  setRole(e.target.value);
+                }}
                 className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
               >
-                <option value="">-- Selecciona una Institución --</option>
-                {institutions.map(inst => (
-                  <option key={inst.id} value={inst.id}>{inst.name} ({inst.profile})</option>
-                ))}
-                <option value="NEW" className="font-bold text-blue-600">+ Registrar Nueva Institución...</option>
+                <option value="universidad">Universidad</option>
+                <option value="management">Rol institucion-usuario</option>
+                <option value="admin">Administrador Global del Sistema</option>
               </select>
             </div>
 
-            {institutionId === 'NEW' && (
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl space-y-4 border border-blue-100 dark:border-blue-800 animate-fade-in">
-                <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Datos de la Nueva Entidad</p>
-                <div>
-                   <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Oficial</label>
-                   <input 
-                     type="text" 
-                     value={newInstName} 
-                     onChange={e => setNewInstName(e.target.value)} 
-                     placeholder="Ej. Institución de Innovación"
-                     className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-                     required={institutionId === 'NEW'}
-                   />
-                </div>
-                <div>
-                   <label className="block text-xs font-bold text-slate-500 mb-1">Giro / Perfil de Negocio</label>
-                   <input 
-                     type="text" 
-                     value={newInstProfile} 
-                     onChange={e => setNewInstProfile(e.target.value)} 
-                     placeholder="Ej. Desarrollo Tecnológico, Salud, etc."
-                     className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
-                     required={institutionId === 'NEW'}
-                   />
-                </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Institución a la que perteneces</label>
+                <select 
+                  value={institutionId} 
+                  onChange={e => setInstitutionId(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white"
+                >
+                  <option value="">-- Selecciona una Institución --</option>
+                  {institutions.map(inst => (
+                    <option key={inst.id} value={inst.id}>{inst.name} ({inst.profile})</option>
+                  ))}
+                  <option value="NEW" className="font-bold text-blue-600">+ Registrar Nueva Institución...</option>
+                </select>
               </div>
-            )}
-          </div>
 
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-blue-500/30">
-            {loading ? 'Registrando...' : 'Registrarse'}
-          </button>
-        </form>
+              {institutionId === 'NEW' && (
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl space-y-4 border border-blue-100 dark:border-blue-800 animate-fade-in">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-2">Datos de la Nueva Entidad</p>
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Oficial</label>
+                     <input 
+                       type="text" 
+                       value={newInstName} 
+                       onChange={e => setNewInstName(e.target.value)} 
+                       placeholder="Ej. Institución de Innovación"
+                       className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                       required={institutionId === 'NEW'}
+                     />
+                  </div>
+                  <div>
+                     <label className="block text-xs font-bold text-slate-500 mb-1">Giro / Perfil de Negocio</label>
+                     <input 
+                       type="text" 
+                       value={newInstProfile} 
+                       onChange={e => setNewInstProfile(e.target.value)} 
+                       placeholder="Ej. Desarrollo Tecnológico, Salud, etc."
+                       className="w-full px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
+                       required={institutionId === 'NEW'}
+                     />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-blue-500/30">
+              {loading ? 'Registrando...' : 'Registrarse'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyCode} className="space-y-4 mb-6">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed text-center">
+              Por favor ingresa el código de seguridad de 6 dígitos enviado a <strong>{verificationEmail}</strong> para activar tu cuenta.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Código de Seguridad</label>
+              <input 
+                type="text" 
+                maxLength="6"
+                value={verificationCode}
+                onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all dark:text-white text-center font-mono text-xl tracking-wider"
+                required
+                disabled={loading}
+                placeholder="123456"
+              />
+            </div>
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25 flex justify-center items-center gap-2"
+            >
+              {loading ? (
+                <span className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : 'Verificar y Registrarse'}
+            </button>
+            <button 
+              type="button" 
+              onClick={() => { setShowVerification(false); setError(''); setMessage(''); setVerificationCode(''); }}
+              className="w-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-755 text-slate-755 dark:text-slate-200 py-2.5 rounded-xl font-medium transition-colors"
+              disabled={loading}
+            >
+              Volver al Formulario
+            </button>
+          </form>
+        )}
 
         <div className="text-center mt-4">
           <p className="text-sm text-slate-600 dark:text-slate-400">

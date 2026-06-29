@@ -8,7 +8,10 @@ const userSchema = new mongoose.Schema({
   institutionId: { type: String, ref: 'Institution' },
   role: { type: String, enum: ['universidad', 'management', 'admin'], default: 'universidad' },
   resetCode: { type: String, default: null },
-  resetCodeExpires: { type: Date, default: null }
+  resetCodeExpires: { type: Date, default: null },
+  isVerified: { type: Boolean, default: false },
+  verificationCode: { type: String, default: null },
+  verificationCodeExpires: { type: Date, default: null }
 }, { timestamps: true });
 
 // Hash password before saving

@@ -51,16 +51,16 @@ const AuthProvider = ({ children }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
         setUser(data.user);
         localStorage.setItem('user', JSON.stringify(data.user));
-        return true;
+        return { success: true };
       }
-      return false;
+      return { success: false, error: data.error || 'Credenciales inválidas' };
     } catch (e) {
       console.error(e);
-      return false;
+      return { success: false, error: 'Error de conexión con el servidor' };
     }
   };
 

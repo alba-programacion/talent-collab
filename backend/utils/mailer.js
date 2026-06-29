@@ -26,8 +26,8 @@ if (host && user) {
 const sendBrevoApi = (to, subject, text, html) => {
   return new Promise((resolve, reject) => {
     const apiKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.replace(/[\r\n\s]/g, '') : null;
-    const fromEmail = (process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@talentcollab.com').toString().trim();
-    const fromName = (process.env.BREVO_FROM_NAME || 'TalentCollab').toString().trim();
+    const fromEmail = (process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@amib.com.mx').toString().trim();
+    const fromName = (process.env.BREVO_FROM_NAME || 'Sistema de Intercambio').toString().trim();
 
     const postData = JSON.stringify({
       sender: {
@@ -97,7 +97,7 @@ const getPremiumEmailTemplate = (contentHtml, link = null) => {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notificación TalentCollab</title>
+  <title>Notificación - Sistema de Intercambio</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -187,7 +187,7 @@ const getPremiumEmailTemplate = (contentHtml, link = null) => {
   <div class="wrapper">
     <div class="container">
       <div class="header">
-        <h1>TalentCollab</h1>
+        <h1>Sistema de Intercambio</h1>
       </div>
       <div class="content">
         <h2>Notificación de la plataforma</h2>
@@ -195,7 +195,7 @@ const getPremiumEmailTemplate = (contentHtml, link = null) => {
         ${linkButton}
       </div>
       <div class="footer">
-        <p>© 2026 TalentCollab. Todos los derechos reservados.</p>
+        <p>© 2026 Sistema de Intercambio. Todos los derechos reservados.</p>
         <p>Este es un correo automático generado por el sistema. Por favor no respondas a este mensaje.</p>
       </div>
     </div>
@@ -206,8 +206,8 @@ const getPremiumEmailTemplate = (contentHtml, link = null) => {
 
 const sendEmail = async (to, subject, text, html, link = null) => {
   const brevoKey = process.env.BREVO_API_KEY ? process.env.BREVO_API_KEY.replace(/[\r\n\s]/g, '') : null;
-  const fromEmail = (process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@talentcollab.com').toString().trim();
-  const fromName = (process.env.BREVO_FROM_NAME || 'TalentCollab').toString().trim();
+  const fromEmail = (process.env.BREVO_FROM_EMAIL || process.env.EMAIL_USER || 'no-reply@amib.com.mx').toString().trim();
+  const fromName = (process.env.BREVO_FROM_NAME || 'Sistema de Intercambio').toString().trim();
 
   // Auto-wrap in premium template if it's not a full HTML document
   let finalHtml = html;

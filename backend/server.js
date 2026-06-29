@@ -65,7 +65,7 @@ async function checkAndSendCommitteeReminder(force = false) {
         message: 'Recordatorio: mañana es el comité en Av. paseo de la republica #255, P1',
         type: 'ALERT',
         link: '/eventos',
-        emailSubject: 'Recordatorio: Comité mensual de TalentCollab',
+        emailSubject: 'Recordatorio: Comité mensual - Sistema de Intercambio',
         emailHtml: `
           <p>Hola,</p>
           <p>Te recordamos que <strong>mañana</strong> se llevará a cabo el comité mensual.</p>
@@ -109,6 +109,9 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/talent-co
     }
     // Migration: user -> universidad
     await User.updateMany({ role: 'user' }, { role: 'universidad' });
+
+    // Migration: Mark existing users as verified
+    await User.updateMany({ isVerified: { $exists: false } }, { isVerified: true });
     
     // Migration: CV Statuses
     await CV.updateMany({ status: 'Disponible' }, { status: null });
@@ -331,9 +334,6 @@ app.post('/api/auth/register', async (req, res) => {
     const { name, email, password, role, institutionId, newInstitutionName, newInstitutionProfile } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Faltan datos requeridos (Nombre, correo, contraseña)' });
 
-    const existing = await User.findOne({ email });
-    if (existing) return res.status(400).json({ error: 'Este correo ya se encuentra registrado.' });
-
     const finalRole = role && ['universidad', 'management', 'admin'].includes(role) ? role : 'universidad';
     let finalInstId = institutionId;
 
@@ -349,17 +349,105 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (!finalInstId) return res.status(400).json({ error: 'Debes seleccionar o crear una institución aportadora válida.' });
 
-    const newUser = new User({
-      name,
-      email,
-      password,
-      role: finalRole,
-      institutionId: finalInstId
-    });
+    // Check if user already exists
+    const existing = await User.findOne({ email });
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins validity
 
-    await newUser.save();
-    res.status(201).json({ message: 'Registro exitoso', user: { id: newUser._id, name, email, role: newUser.role, institutionId: newUser.institutionId } });
-  } catch (err) { res.status(500).json({ error: 'Error interno del servidor al registrar.' }); }
+    if (existing) {
+      if (existing.isVerified) {
+        return res.status(400).json({ error: 'Este correo ya se encuentra registrado.' });
+      } else {
+        // Update pending user details and send new code
+        existing.name = name;
+        existing.password = password; // pre-save hook will hash it automatically
+        existing.role = finalRole;
+        existing.institutionId = finalInstId;
+        existing.verificationCode = code;
+        existing.verificationCodeExpires = expires;
+        await existing.save();
+        
+        console.log(`[REGISTER RE-SEND 2FA] Code ${code} for pending user: ${email}`);
+      }
+    } else {
+      // Create new pending user
+      const newUser = new User({
+        name,
+        email,
+        password,
+        role: finalRole,
+        institutionId: finalInstId,
+        isVerified: false,
+        verificationCode: code,
+        verificationCodeExpires: expires
+      });
+      await newUser.save();
+      
+      console.log(`[REGISTER 2FA] Code ${code} for user: ${email}`);
+    }
+
+    // Send registration verification email
+    const emailSubject = 'Código de verificación de registro - Sistema de Intercambio';
+    const emailText = `Tu código de verificación de registro es: ${code}`;
+    const emailHtml = `
+      <p>Hola <strong>${name}</strong>,</p>
+      <p>Gracias por iniciar tu registro en el <strong>Sistema de Intercambio</strong>.</p>
+      <p>Utiliza el siguiente código de seguridad de un solo uso para verificar tu dirección de correo electrónico:</p>
+      <div style="text-align: center; margin: 30px 0;">
+        <span style="font-family: monospace; font-size: 36px; font-weight: bold; color: #4f46e5; background-color: #f1f5f9; padding: 10px 24px; border-radius: 12px; letter-spacing: 6px; border: 1px dashed #4f46e5; display: inline-block;">${code}</span>
+      </div>
+      <p style="color: #64748b; font-size: 14px;">Este código es válido por 15 minutos. Si no has iniciado este registro, por favor ignora este correo.</p>
+    `;
+
+    try {
+      await sendEmail(email, emailSubject, emailText, emailHtml);
+    } catch (mailError) {
+      console.error('[REGISTER MAIL ERROR] Failed to send verification email:', mailError);
+    }
+
+    res.status(200).json({ verificationRequired: true, email });
+  } catch (err) { 
+    console.error('[REGISTER ERROR]:', err);
+    res.status(500).json({ error: 'Error interno del servidor al registrar.' }); 
+  }
+});
+
+app.post('/api/auth/verify-registration', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Faltan datos obligatorios (correo o código).' });
+    }
+
+    const dbUser = await User.findOne({ email });
+    if (!dbUser) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    if (dbUser.isVerified) {
+      return res.status(400).json({ error: 'Esta cuenta ya ha sido verificada anteriormente.' });
+    }
+
+    if (!dbUser.verificationCode || dbUser.verificationCode !== code.trim()) {
+      return res.status(400).json({ error: 'El código de seguridad es inválido.' });
+    }
+
+    if (new Date() > dbUser.verificationCodeExpires) {
+      return res.status(400).json({ error: 'El código de seguridad ha expirado.' });
+    }
+
+    // Mark as verified
+    dbUser.isVerified = true;
+    dbUser.verificationCode = null;
+    dbUser.verificationCodeExpires = null;
+    await dbUser.save();
+
+    console.log(`[VERIFY REGISTRATION SUCCESS] User verified: ${email}`);
+    res.json({ message: 'Cuenta verificada exitosamente. Ya puedes iniciar sesión.' });
+  } catch (err) {
+    console.error('[VERIFY REGISTRATION ERROR]:', err);
+    res.status(500).json({ error: 'Error interno del servidor al verificar el registro.' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -369,6 +457,10 @@ app.post('/api/auth/login', async (req, res) => {
     const dbUser = await User.findOne({ email }).populate('institutionId');
     if (dbUser) {
       if (await dbUser.comparePassword(password)) {
+        if (!dbUser.isVerified) {
+          return res.status(401).json({ error: 'Tu cuenta no está verificada. Por favor verifica tu correo electrónico para activarla.' });
+        }
+        
         console.log(`[LOGIN SUCCESS] Found in DB: ${email}`);
         return res.json({
           token: 'jwt-' + dbUser._id,
@@ -387,7 +479,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
     const user = MOCK_USERS.find(u => u.email === email && u.password === password);
     if (user) {
-      console.log(`[LOGIN SUCCESS] Found in Mock Users: ${email}`);
+      console.log(`[LOGIN SUCCESS] Found in Mock Users: ${email}. Bypassing verification.`);
       const { password: _, ...safeUser } = user;
       return res.json({ token: 'mock-token', user: safeUser });
     }
@@ -420,11 +512,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     console.log(`[AUTH] Generated reset code ${code} for ${user.email}`);
 
     // Send email with code
-    const emailSubject = 'Código de recuperación de contraseña - TalentCollab';
+    const emailSubject = 'Código de recuperación de contraseña - Sistema de Intercambio';
     const emailText = `Tu código de recuperación es: ${code}`;
     const emailHtml = `
       <p>Hola <strong>${user.name}</strong>,</p>
-      <p>Has solicitado restablecer tu contraseña en la plataforma TalentCollab.</p>
+      <p>Has solicitado restablecer tu contraseña en la plataforma del Sistema de Intercambio.</p>
       <p>Utiliza el siguiente código de seguridad de un solo uso para continuar:</p>
       <div style="text-align: center; margin: 30px 0;">
         <span style="font-family: monospace; font-size: 36px; font-weight: bold; color: #4f46e5; background-color: #f1f5f9; padding: 10px 24px; border-radius: 12px; letter-spacing: 6px; border: 1px dashed #4f46e5; display: inline-block;">${code}</span>
@@ -752,7 +844,7 @@ app.post('/api/vacancies', async (req, res) => {
         message: `¡Nueva vacante publicada! ${instName} ha publicado la vacante de ${v.role}.`,
         type: 'INFO',
         link: `/vacantes?id=${v._id}`,
-        emailSubject: 'Nueva vacante disponible - TalentCollab',
+        emailSubject: 'Nueva vacante disponible - Sistema de Intercambio',
         emailHtml: `<p>La institución <strong>${instName}</strong> ha publicado una nueva vacante para el puesto de <strong>${v.role}</strong>.</p><p>Ubicación: ${v.location} | Modalidad: ${v.modality}</p>`
       });
     } catch (err) {
@@ -1391,7 +1483,7 @@ app.patch('/api/fines/:id/status', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Servidor de TalentCollab funcionando correctamente 🚀');
+  res.send('Servidor del Sistema de Intercambio funcionando correctamente 🚀');
 });
 
 const PORT = process.env.PORT || 5000;

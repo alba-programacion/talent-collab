@@ -146,7 +146,7 @@ const Login = () => {
                <img src={logoAMIB} alt="AMIB Logo" className="h-full w-full object-contain scale-135" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 mb-2">Intercambio de Talento</h1>
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 mb-2">Sistema de Intercambio-AMIB</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
             {mode === 'login' && 'Sistema de Colaboración Inter-Institucional'}
             {mode === 'forgot' && 'Recuperación de Contraseña'}

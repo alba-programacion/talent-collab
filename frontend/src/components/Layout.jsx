@@ -199,7 +199,7 @@ const Layout = ({ children }) => {
             />
           </div>
           <h1 className="text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600">
-            Intercambio de Talento
+            Sistema de Intercambio-AMIB
           </h1>
           <div className="mt-4 p-2.5 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
             <p className="text-[10px] uppercase tracking-wider font-bold text-indigo-400 dark:text-indigo-400 mb-1">Institución Emisora</p>
@@ -262,7 +262,7 @@ const Layout = ({ children }) => {
               />
             </div>
             <div>
-              <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 leading-none">Intercambio de Talento</span>
+              <span className="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-indigo-600 leading-none">Sistema de Intercambio-AMIB</span>
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{user?.institutionName || 'Admin'}</p>
             </div>
           </div>

@@ -65,7 +65,7 @@ async function checkAndSendCommitteeReminder(force = false) {
         message: 'Recordatorio: mañana es el comité en Av. paseo de la republica #255, P1',
         type: 'ALERT',
         link: '/eventos',
-        emailSubject: 'Recordatorio: Comité mensual - Sistema de Intercambio',
+        emailSubject: 'Recordatorio: Comité mensual - Sistema de Intercambio-AMIB',
         emailHtml: `
           <p>Hola,</p>
           <p>Te recordamos que <strong>mañana</strong> se llevará a cabo el comité mensual.</p>
@@ -387,11 +387,11 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     // Send registration verification email
-    const emailSubject = 'Código de verificación de registro - Sistema de Intercambio';
+    const emailSubject = 'Código de verificación de registro - Sistema de Intercambio-AMIB';
     const emailText = `Tu código de verificación de registro es: ${code}`;
     const emailHtml = `
       <p>Hola <strong>${name}</strong>,</p>
-      <p>Gracias por iniciar tu registro en el <strong>Sistema de Intercambio</strong>.</p>
+      <p>Gracias por iniciar tu registro en el <strong>Sistema de Intercambio-AMIB</strong>.</p>
       <p>Utiliza el siguiente código de seguridad de un solo uso para verificar tu dirección de correo electrónico:</p>
       <div style="text-align: center; margin: 30px 0;">
         <span style="font-family: monospace; font-size: 36px; font-weight: bold; color: #4f46e5; background-color: #f1f5f9; padding: 10px 24px; border-radius: 12px; letter-spacing: 6px; border: 1px dashed #4f46e5; display: inline-block;">${code}</span>
@@ -512,11 +512,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     console.log(`[AUTH] Generated reset code ${code} for ${user.email}`);
 
     // Send email with code
-    const emailSubject = 'Código de recuperación de contraseña - Sistema de Intercambio';
+    const emailSubject = 'Código de recuperación de contraseña - Sistema de Intercambio-AMIB';
     const emailText = `Tu código de recuperación es: ${code}`;
     const emailHtml = `
       <p>Hola <strong>${user.name}</strong>,</p>
-      <p>Has solicitado restablecer tu contraseña en la plataforma del Sistema de Intercambio.</p>
+      <p>Has solicitado restablecer tu contraseña en la plataforma del Sistema de Intercambio-AMIB.</p>
       <p>Utiliza el siguiente código de seguridad de un solo uso para continuar:</p>
       <div style="text-align: center; margin: 30px 0;">
         <span style="font-family: monospace; font-size: 36px; font-weight: bold; color: #4f46e5; background-color: #f1f5f9; padding: 10px 24px; border-radius: 12px; letter-spacing: 6px; border: 1px dashed #4f46e5; display: inline-block;">${code}</span>
@@ -844,7 +844,7 @@ app.post('/api/vacancies', async (req, res) => {
         message: `¡Nueva vacante publicada! ${instName} ha publicado la vacante de ${v.role}.`,
         type: 'INFO',
         link: `/vacantes?id=${v._id}`,
-        emailSubject: 'Nueva vacante disponible - Sistema de Intercambio',
+        emailSubject: 'Nueva vacante disponible - Sistema de Intercambio-AMIB',
         emailHtml: `<p>La institución <strong>${instName}</strong> ha publicado una nueva vacante para el puesto de <strong>${v.role}</strong>.</p><p>Ubicación: ${v.location} | Modalidad: ${v.modality}</p>`
       });
     } catch (err) {
@@ -872,15 +872,15 @@ app.patch('/api/vacancies/:id/status', async (req, res) => {
 
         if (v.status === 'Cerrada') {
           message = `La vacante de ${v.role} publicada por ${instName} ha sido cerrada.`;
-          emailSubject = `Vacante cerrada: ${v.role} - Intercambio de Talento`;
+          emailSubject = `Vacante cerrada: ${v.role} - Sistema de Intercambio-AMIB`;
           emailHtml = `<p>La vacante de <strong>${v.role}</strong> publicada por la institución <strong>${instName}</strong> ha sido cerrada.</p><p>Ya no se aceptan más postulaciones para este puesto.</p>`;
         } else if (v.status === 'Pausada') {
           message = `La vacante de ${v.role} publicada por ${instName} ha sido pausada.`;
-          emailSubject = `Vacante pausada: ${v.role} - Intercambio de Talento`;
+          emailSubject = `Vacante pausada: ${v.role} - Sistema de Intercambio-AMIB`;
           emailHtml = `<p>La vacante de <strong>${v.role}</strong> publicada por la institución <strong>${instName}</strong> ha sido pausada temporalmente.</p>`;
         } else if (v.status === 'Abierta') {
           message = `La vacante de ${v.role} publicada por ${instName} está abierta nuevamente.`;
-          emailSubject = `Vacante abierta: ${v.role} - Intercambio de Talento`;
+          emailSubject = `Vacante abierta: ${v.role} - Sistema de Intercambio-AMIB`;
           emailHtml = `<p>La vacante de <strong>${v.role}</strong> publicada por la institución <strong>${instName}</strong> está abierta nuevamente para recibir candidatos.</p>`;
         }
 
@@ -1124,7 +1124,7 @@ app.patch('/api/cvs/:id/status', async (req, res) => {
             message: `El estado de tu candidato ${cv.name}${vacancyText} ha sido ${actionVerb}.`,
             type: status === 'Aceptado' ? 'SUCCESS' : status === 'Rechazado' ? 'ALERT' : 'INFO',
             link: '/cvs',
-            emailSubject: `Cambio de estado de candidato: ${cv.name} - Intercambio de Talento`,
+            emailSubject: `Cambio de estado de candidato: ${cv.name} - Sistema de Intercambio-AMIB`,
             emailHtml: `
               <p>Hola,</p>
               <p>Te notificamos que el estado de tu candidato <strong>${cv.name}</strong> ha cambiado a: <strong>${status}</strong>.</p>
@@ -1220,10 +1220,10 @@ app.post('/api/tasks/request-cv', async (req, res) => {
       
       await Notification.create({
         targetInstitutionId,
-        message: `¡Nueva Solicitud SLA! ${senderInstitutionName} te ha solicitado CVs para la vacante "${vacancyInfo?.role || 'general'}".`,
+        message: `¡Nueva Solicitud! ${senderInstitutionName} te ha solicitado CVs para la vacante "${vacancyInfo?.role || 'general'}".`,
         type: 'INFO',
         link: '/tareas',
-        emailSubject: 'Nueva Solicitud de CVs (SLA)',
+        emailSubject: 'Nueva Solicitud de CVs',
         emailHtml: `<p>La institución ${senderInstitutionName} te ha solicitado CVs para la vacante <strong>"${vacancyInfo?.role || 'general'}"</strong>.</p><p>Fecha límite: ${finalDueDate.toLocaleDateString()}</p>`
       });
 
@@ -1239,10 +1239,10 @@ app.post('/api/tasks/request-cv', async (req, res) => {
 
         await Notification.create({
           targetInstitutionId: 'global',
-          message: `¡Solicitud SLA Iniciada! ${senderInstNameObj} ha solicitado CVs a ${targetInstitutionName} para la vacante "${vacancyInfo?.role || 'general'}".`,
+          message: `¡Solicitud Iniciada! ${senderInstNameObj} ha solicitado CVs a ${targetInstitutionName} para la vacante "${vacancyInfo?.role || 'general'}".`,
           type: 'INFO',
           link: '/gestion-tareas',
-          emailSubject: 'Nueva Solicitud de CVs (SLA) en la plataforma',
+          emailSubject: 'Nueva Solicitud de CVs en la plataforma',
           emailHtml: `<p>La institución <strong>${senderInstNameObj}</strong> ha solicitado CVs a la institución <strong>${targetInstitutionName}</strong> para la vacante <strong>"${vacancyInfo?.role || 'general'}"</strong>.</p><p>Fecha límite: ${finalDueDate.toLocaleDateString()}</p>`
         });
       }
@@ -1354,10 +1354,10 @@ app.post('/api/tasks/:id/fulfill-cv', upload.single('document'), async (req, res
       const n1 = await Notification.create({
         targetInstitutionId: targetInstId || 'global',
         targetUserEmail: targetEmail,
-        message: `¡SLA Cumplido! ${sourceInstitutionId} te ha enviado un CV (${name}) que solicitaste.`,
+        message: `¡Solicitud Atendida! ${sourceInstitutionId} te ha enviado un CV (${name}) que solicitaste.`,
         type: 'SUCCESS',
         link: task.targetVacancyId ? `/vacantes?id=${task.targetVacancyId}` : '/gestion-tareas',
-        emailSubject: 'SLA Cumplido: CV Recibido',
+        emailSubject: 'Solicitud Atendida: CV Recibido',
         emailHtml: `<p>La institución <strong>${sourceInstitutionId}</strong> ha respondido a tu solicitud enviando el CV de <strong>${name}</strong> para la vacante correspondiente.</p><p>Puedes revisarlo en la sección de Gestión de Tareas de la plataforma.</p>`
       });
       console.log(`[NOTIF CREATED] Requester: ${targetInstId || 'global'} | UserEmail: ${targetEmail || 'N/A'} - ${n1.message}`);
@@ -1483,7 +1483,7 @@ app.patch('/api/fines/:id/status', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('Servidor del Sistema de Intercambio funcionando correctamente 🚀');
+  res.send('Servidor del Sistema de Intercambio-AMIB funcionando correctamente 🚀');
 });
 
 const PORT = process.env.PORT || 5000;

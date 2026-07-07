@@ -15,7 +15,7 @@ async function run() {
   try {
     const result = await sendEmail(
       testEmail,
-      'Test de Integración TalentCollab (Brevo)',
+      'Test de Integración - Sistema de Intercambio-AMIB (Brevo)',
       'Este es un correo de prueba del sistema de notificaciones migrado a Brevo.',
       '<p>Este es un correo de prueba del sistema de notificaciones.</p><p>La integración con <strong>Brevo API</strong> funciona correctamente.</p>',
       '/tareas'

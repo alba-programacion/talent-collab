@@ -627,11 +627,12 @@ app.post('/api/events/comite/reminder', async (req, res) => {
 app.get('/api/metrics', async (req, res) => {
   try {
     console.log('[DEBUG metrics query]', Buffer.from('En trámite').toString('hex'));
-    const [totalVacancies, totalInstitutions, totalCvs, cvsInProcess] = await Promise.all([
+    const [totalVacancies, totalInstitutions, totalCvs, cvsInProcess, acceptedCvs] = await Promise.all([
       Vacancy.countDocuments(),
       Institution.countDocuments(),
       CV.countDocuments({ $or: [{ targetVacancyId: { $ne: null } }, { targetInstitutionId: { $ne: null } }] }),
-      CV.countDocuments({ status: 'En Proceso' })
+      CV.countDocuments({ status: 'En Proceso' }),
+      CV.countDocuments({ status: 'Aceptado' })
     ]);
 
     // 1. Task Status Distribution (Requested, Sent, Open)
@@ -696,7 +697,7 @@ app.get('/api/metrics', async (req, res) => {
     }));
 
     res.json({
-      totalVacancies, totalInstitutions, totalCvs, cvsInProcess,
+      totalVacancies, totalInstitutions, totalCvs, cvsInProcess, acceptedCvs,
       requestStats: { requested: requestedCount, sent: sentCount, open: openCount },
       vacanciesByInst: vacanciesByInstFormatted,
       cvsByInst: cvsByInstFormatted,
@@ -858,6 +859,17 @@ app.post('/api/vacancies', async (req, res) => {
 app.patch('/api/vacancies/:id/status', async (req, res) => {
   try {
     const v = await Vacancy.findById(req.params.id);
+    if (!v) {
+      return res.status(404).json({ error: 'Vacante no encontrada' });
+    }
+
+    const requesterInstitutionId = req.headers['x-requester-institution-id'];
+    const requesterRole = req.headers['x-requester-role'];
+
+    if (v.institutionId !== requesterInstitutionId) {
+      return res.status(403).json({ error: 'Solo la institución que subió la vacante puede cambiar su estatus.' });
+    }
+
     const oldStatus = v.status;
     v.status = req.body.status;
     await v.save();
@@ -905,13 +917,25 @@ app.patch('/api/vacancies/:id/status', async (req, res) => {
 
 app.put('/api/vacancies/:id', async (req, res) => {
   try {
-    console.log(`[UPDATE VACANCY] ID: ${req.params.id}`, req.body);
-    const v = await Vacancy.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const v = await Vacancy.findById(req.params.id);
     if (!v) {
-      console.log(`[UPDATE FAILED] Vacancy not found: ${req.params.id}`);
       return res.status(404).json({ error: 'Vacante no encontrada' });
     }
-    res.json(v);
+
+    const requesterInstitutionId = req.headers['x-requester-institution-id'];
+    const requesterRole = req.headers['x-requester-role'];
+
+    if (v.institutionId !== requesterInstitutionId && requesterRole !== 'admin') {
+      return res.status(403).json({ error: 'Solo la institución que subió la vacante puede modificarla.' });
+    }
+
+    if (v.status === 'Cerrada') {
+      return res.status(400).json({ error: 'No se puede modificar una vacante que se encuentra cerrada.' });
+    }
+
+    console.log(`[UPDATE VACANCY] ID: ${req.params.id}`, req.body);
+    const updated = await Vacancy.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    res.json(updated);
   } catch (e) { 
     console.error(`[UPDATE ERROR]`, e);
     res.status(400).json({ error: e.message }); 
@@ -920,8 +944,19 @@ app.put('/api/vacancies/:id', async (req, res) => {
 
 app.delete('/api/vacancies/:id', async (req, res) => {
   try {
-    const v = await Vacancy.findByIdAndDelete(req.params.id);
-    if (!v) return res.status(404).json({ error: 'Vacante no encontrada' });
+    const v = await Vacancy.findById(req.params.id);
+    if (!v) {
+      return res.status(404).json({ error: 'Vacante no encontrada' });
+    }
+
+    const requesterInstitutionId = req.headers['x-requester-institution-id'];
+    const requesterRole = req.headers['x-requester-role'];
+
+    if (v.institutionId !== requesterInstitutionId && requesterRole !== 'admin') {
+      return res.status(403).json({ error: 'Solo la institución que subió la vacante puede eliminarla.' });
+    }
+
+    await Vacancy.findByIdAndDelete(req.params.id);
     res.json({ message: 'Vacante eliminada' });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
@@ -976,6 +1011,14 @@ app.post('/api/cvs/vacancy', upload.single('document'), async (req, res) => {
       return res.status(403).json({ error: 'Trazabilidad de origen obligatoria: Se requiere Institución de Origen para postular CVs.' });
     }
 
+    const vacancyInfo = await Vacancy.findById(targetVacancyId).populate('institutionId');
+    if (!vacancyInfo) {
+      return res.status(404).json({ error: 'La vacante asociada no existe.' });
+    }
+    if (vacancyInfo.status === 'Cerrada' || vacancyInfo.status === 'Pausada') {
+      return res.status(403).json({ error: `La vacante está ${vacancyInfo.status.toLowerCase()}. No se permiten postulaciones.` });
+    }
+
     const fileInfo = getFileData(req.file);
     const cv = await CV.create({
       name, email, 
@@ -988,8 +1031,7 @@ app.post('/api/cvs/vacancy', upload.single('document'), async (req, res) => {
 
     // --- NOTIFICATION TARGETING ---
     // Only notify the vacancy-owning institution if the applicant is from a different institution
-    const vacancyInfo = await Vacancy.findById(targetVacancyId).populate('institutionId');
-    if (vacancyInfo && vacancyInfo.institutionId && vacancyInfo.institutionId._id.toString() !== sourceInstitutionId.toString()) {
+    if (vacancyInfo.institutionId && vacancyInfo.institutionId._id.toString() !== sourceInstitutionId.toString()) {
       const message = `¡Nueva Postulación! ${sourceInstitutionId} ha enviado a ${name} para tu vacante de ${vacancyInfo.role}.`;
       await Notification.create({
         targetInstitutionId: vacancyInfo.institutionId._id,
@@ -1174,6 +1216,14 @@ app.post('/api/tasks/request-cv', async (req, res) => {
   try {
     const { targetVacancyId, senderEmail, targetInstitutionId, description, dueDate } = req.body;
 
+    const vacancyInfo = await Vacancy.findById(targetVacancyId);
+    if (!vacancyInfo) {
+      return res.status(404).json({ error: 'La vacante asociada no existe.' });
+    }
+    if (vacancyInfo.status === 'Cerrada' || vacancyInfo.status === 'Pausada') {
+      return res.status(403).json({ error: `La vacante está ${vacancyInfo.status.toLowerCase()}. No se pueden solicitar CVs.` });
+    }
+
     // Check if the sender is an admin
     const senderUser = await User.findOne({ email: senderEmail });
     if (!senderUser || senderUser.role !== 'admin') {
@@ -1210,7 +1260,6 @@ app.post('/api/tasks/request-cv', async (req, res) => {
     });
 
     try {
-      const vacancyInfo = await Vacancy.findById(targetVacancyId);
       let senderInstitutionName = 'Alguien de otra institución';
       const senderUser = await User.findOne({ email: senderEmail });
       if (senderUser && senderUser.institutionId) {
@@ -1396,7 +1445,7 @@ app.patch('/api/users/:id', async (req, res) => {
 
 // --- CONTACTS API ---
 app.get('/api/contacts', async (req, res) => {
-  try { res.json(await Contact.find().sort({ createdAt: -1 })); }
+  try { res.json(await Contact.find().sort({ institutionName: 1 })); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.post('/api/contacts', async (req, res) => {

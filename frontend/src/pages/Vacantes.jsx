@@ -127,6 +127,24 @@ const Vacantes = () => {
   }, [user]);
 
   useEffect(() => {
+    if (selectedVacancy) {
+      setTimeout(() => {
+        const modalBody = document.getElementById('vacancy-modal-body');
+        if (modalBody) modalBody.scrollTop = 0;
+      }, 50);
+    }
+  }, [selectedVacancy]);
+
+  useEffect(() => {
+    if (showAddModal) {
+      setTimeout(() => {
+        const formEl = document.getElementById('add-vacancy-form');
+        if (formEl) formEl.scrollTop = 0;
+      }, 50);
+    }
+  }, [showAddModal]);
+
+  useEffect(() => {
     if (vacancies.length > 0) {
       const params = new URLSearchParams(location.search);
       const vacancyId = params.get('id');
@@ -187,7 +205,11 @@ const Vacantes = () => {
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Requester-Institution-Id': user?.institutionId || '',
+          'X-Requester-Role': user?.role || ''
+        },
         body: JSON.stringify(body)
       });
       if (!res.ok) {
@@ -251,17 +273,15 @@ const Vacantes = () => {
       origin: { y: 0.6 },
       colors: ['#2563eb', '#10b981', '#ffffff']
     });
-    setSuccess('¡Candidato postulado exitosamente! La institución recibirá una notificación.');
+    setSuccessMessage('¡Candidato postulado con éxito!');
+    setTimeout(() => setSuccessMessage(''), 3000);
+    handleCloseVacancyModal();
     setApplyForm({ name: '', email: '' });
 
     // Clear file input UI
     const fileInput = document.querySelector('input[type="file"]');
     if (fileInput) fileInput.value = '';
     setDocumentFile(null);
-
-    // Auto-scroll to top to see the success message
-    const modalBody = document.getElementById('vacancy-modal-body');
-    if (modalBody) modalBody.scrollTo({ top: 0, behavior: 'smooth' });
 
     // Reset submitting immediately so the button spinner disappears instantly
     setSubmittingCv(false);
@@ -276,7 +296,6 @@ const Vacantes = () => {
         if (!res.ok) throw new Error(data.error || 'Error al enviar CV');
         fetchVacancies();
         fetchAllCvs();
-        setSelectedVacancy(prev => prev ? ({ ...prev, cvCount: prev.cvCount + 1 }) : null);
       })
       .catch((err) => {
         console.error("Background application error:", err);
@@ -335,7 +354,11 @@ const Vacantes = () => {
     try {
       const res = await fetch(`${API_URL}/api/vacancies/${vacancyId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Requester-Institution-Id': user?.institutionId || '',
+          'X-Requester-Role': user?.role || ''
+        },
         body: JSON.stringify({ status: newStatus })
       });
       if (!res.ok) throw new Error('Error al actualizar status de vacante');
@@ -349,7 +372,13 @@ const Vacantes = () => {
   const handleDeleteVacancy = async (vacancyId) => {
     if (!window.confirm("¿Estás seguro de que deseas eliminar esta vacante de forma permanente?")) return;
     try {
-      const res = await fetch(`${API_URL}/api/vacancies/${vacancyId}`, { method: 'DELETE' });
+      const res = await fetch(`${API_URL}/api/vacancies/${vacancyId}`, { 
+        method: 'DELETE',
+        headers: {
+          'X-Requester-Institution-Id': user?.institutionId || '',
+          'X-Requester-Role': user?.role || ''
+        }
+      });
       if (!res.ok) throw new Error('Error al eliminar');
       fetchVacancies();
       if (selectedVacancy && selectedVacancy.id === vacancyId) handleCloseVacancyModal();
@@ -480,16 +509,24 @@ const Vacantes = () => {
                 <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
                   <Briefcase className="w-6 h-6 text-blue-500" />
                 </div>
-                <select
-                  value={v.status}
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => { e.stopPropagation(); handleUpdateVacancyStatus(v.id, e.target.value); }}
-                  className={`text-xs px-2 py-1 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${v.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : v.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
-                >
-                  <option value="Abierta">Abierta</option>
-                  <option value="Pausada">Pausada</option>
-                  <option value="Cerrada">Cerrada</option>
-                </select>
+                {user?.role === 'admin' || user?.institutionId === v.institutionId ? (
+                  <select
+                    value={v.status}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => { e.stopPropagation(); handleUpdateVacancyStatus(v.id, e.target.value); }}
+                    className={`text-xs px-2 py-1 rounded-lg font-bold border outline-none cursor-pointer hover:opacity-80 transition-opacity ${v.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : v.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                  >
+                    <option value="Abierta">Abierta</option>
+                    <option value="Pausada">Pausada</option>
+                    <option value="Cerrada">Cerrada</option>
+                  </select>
+                ) : (
+                  <span
+                    className={`text-xs px-2 py-1 rounded-lg font-bold border ${v.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : v.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                  >
+                    {v.status}
+                  </span>
+                )}
               </div>
 
               <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{v.role}</h3>
@@ -534,7 +571,7 @@ const Vacantes = () => {
               </div>
             </div>
 
-            <form onSubmit={handleAddVacancy} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            <form id="add-vacancy-form" onSubmit={handleAddVacancy} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">Puesto Solicitado</label>
@@ -648,12 +685,12 @@ const Vacantes = () => {
                     Eliminar
                   </button>
                 )}
-                {(user?.role === 'admin' || user?.institutionId === selectedVacancy.institutionId) && (
+                {(user?.role === 'admin' || user?.institutionId === selectedVacancy.institutionId) && selectedVacancy.status !== 'Cerrada' && (
                   <button onClick={() => handleEditClick(selectedVacancy)} className="text-sm px-3 py-1.5 rounded-lg font-bold border outline-none cursor-pointer transition-colors bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700">
                     Editar
                   </button>
                 )}
-                {user?.role !== 'user' && (
+                {user?.institutionId === selectedVacancy.institutionId ? (
                   <select
                     value={selectedVacancy.status}
                     onChange={(e) => handleUpdateVacancyStatus(selectedVacancy.id, e.target.value)}
@@ -663,6 +700,12 @@ const Vacantes = () => {
                     <option value="Pausada">Status: Pausada</option>
                     <option value="Cerrada">Status: Cerrada</option>
                   </select>
+                ) : (
+                  <span
+                    className={`text-sm px-3 py-1.5 rounded-lg font-bold border ${selectedVacancy.status === 'Cerrada' ? 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700' : selectedVacancy.status === 'Pausada' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:border-amber-700' : 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700'}`}
+                  >
+                    Status: {selectedVacancy.status}
+                  </span>
                 )}
               </div>
             </div>
@@ -821,105 +864,117 @@ const Vacantes = () => {
                   </div>
 
                   {/* Enviar CV a Vacante */}
-                  <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
-                    <div className="mb-4">
-                      <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">Sube el CV directamente a esta vacante para que la institución pueda revisarlo en su base de datos.</p>
+                  {selectedVacancy.status === 'Cerrada' ? (
+                    <div className="mt-8 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 p-4 rounded-xl border border-slate-200 dark:border-slate-700 text-center font-semibold flex items-center justify-center gap-2">
+                      <span>🔒 Esta vacante está cerrada. No se permiten postulaciones ni solicitudes de CVs.</span>
                     </div>
-
-                    <form onSubmit={handleApplyCv} className="space-y-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nombre del Candidato</label>
-                          <input type="text" value={applyForm.name} onChange={e => setApplyForm({ ...applyForm, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                  ) : selectedVacancy.status === 'Pausada' ? (
+                    <div className="mt-8 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 p-4 rounded-xl border border-amber-100 dark:border-amber-900/30 text-center font-semibold flex items-center justify-center gap-2">
+                      <span>⏸️ Esta vacante está pausada. No se permiten nuevas postulaciones ni solicitudes de CVs en este momento.</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                        <div className="mb-4">
+                          <h4 className="text-lg font-bold text-slate-900 dark:text-white">Postular Candidato</h4>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Sube el CV directamente a esta vacante para que la institución pueda revisarlo en su base de datos.</p>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Correo C.</label>
-                          <input type="email" value={applyForm.email} onChange={e => setApplyForm({ ...applyForm, email: e.target.value })} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Archivo CV (PDF/Word)</label>
-                        <input type="file" onChange={e => setDocumentFile(e.target.files[0])} accept=".pdf,.doc,.docx" className="w-full px-3 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 dark:text-white transition-colors cursor-pointer" required />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={!user?.institutionId || submittingCv}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
-                      >
-                        {submittingCv ? (
-                          <>
-                            <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
-                            <span>Postulando...</span>
-                          </>
-                        ) : user?.institutionId ? (
-                          'Subir y Postular Candidato'
-                        ) : (
-                          'Bloqueado: Requiere Institución Aportadora'
-                        )}
-                      </button>
-                    </form>
-                  </div>
 
-                  {/* Solicitar CV a Otra Institución */}
-                  {user?.role === 'admin' && (
-                    <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
-                      <div className="mb-4">
-                        <h4 className="text-lg font-bold text-slate-900 dark:text-white">Solicitar CV a Otra Institución</h4>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Pide directamente a una institución de la red que revise su base de datos y aporte CVs.</p>
-                      </div>
-
-                      <form onSubmit={handleRequestCv} className="space-y-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Institución Destino</label>
-                          <select
-                            value={requestCvForm.targetInstitutionId}
-                            onChange={e => setRequestCvForm({ ...requestCvForm, targetInstitutionId: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                            required
+                        <form onSubmit={handleApplyCv} className="space-y-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nombre del Candidato</label>
+                              <input type="text" value={applyForm.name} onChange={e => setApplyForm({ ...applyForm, name: e.target.value })} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Correo C.</label>
+                              <input type="email" value={applyForm.email} onChange={e => setApplyForm({ ...applyForm, email: e.target.value })} className="w-full px-3 py-2 rounded-lg border dark:border-slate-700 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500" required />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Archivo CV (PDF/Word)</label>
+                            <input type="file" onChange={e => setDocumentFile(e.target.files[0])} accept=".pdf,.doc,.docx" className="w-full px-3 py-2 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 dark:text-white transition-colors cursor-pointer" required />
+                          </div>
+                          <button
+                            type="submit"
+                            disabled={!user?.institutionId || submittingCv}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-medium shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2"
                           >
-                            <option value="">-- Selecciona Institución --</option>
-                            {institutions.filter(i => i.id !== user?.institutionId).map(inst => (
-                              <option key={inst.id} value={inst.id}>{inst.name}</option>
-                            ))}
-                          </select>
+                            {submittingCv ? (
+                              <>
+                                <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                                <span>Postulando...</span>
+                              </>
+                            ) : user?.institutionId ? (
+                              'Subir y Postular Candidato'
+                            ) : (
+                              'Bloqueado: Requiere Institución Aportadora'
+                            )}
+                          </button>
+                        </form>
+                      </div>
+
+                      {/* Solicitar CV a Otra Institución */}
+                      {user?.role === 'admin' && (
+                        <div className="mt-8 border-t border-slate-200 dark:border-slate-700 pt-6 pb-2">
+                          <div className="mb-4">
+                            <h4 className="text-lg font-bold text-slate-900 dark:text-white">Solicitar CV a Otra Institución</h4>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Pide directamente a una institución de la red que revise su base de datos y aporte CVs.</p>
+                          </div>
+
+                          <form onSubmit={handleRequestCv} className="space-y-4 bg-indigo-50 dark:bg-indigo-900/10 p-4 rounded-xl border border-indigo-100 dark:border-indigo-800/30">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Institución Destino</label>
+                              <select
+                                value={requestCvForm.targetInstitutionId}
+                                onChange={e => setRequestCvForm({ ...requestCvForm, targetInstitutionId: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                                required
+                              >
+                                <option value="">-- Selecciona Institución --</option>
+                                {institutions.filter(i => i.id !== user?.institutionId).map(inst => (
+                                  <option key={inst.id} value={inst.id}>{inst.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Acordar Fecha Límite (SLA)</label>
+                              <input
+                                type="date"
+                                value={requestCvForm.dueDate}
+                                onChange={e => setRequestCvForm({ ...requestCvForm, dueDate: e.target.value })}
+                                className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
+                                required
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mensaje Opcional</label>
+                              <textarea
+                                value={requestCvForm.description}
+                                onChange={e => setRequestCvForm({ ...requestCvForm, description: e.target.value })}
+                                placeholder={`Ej. Estamos buscando perfiles para ${selectedVacancy.role}...`}
+                                className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                                rows="2"
+                              ></textarea>
+                            </div>
+                            <button
+                              type="submit"
+                              disabled={submittingRequest || (!user?.institutionId && user?.role !== 'admin')}
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
+                            >
+                              {submittingRequest ? (
+                                <>
+                                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                                  <span>Enviando...</span>
+                                </>
+                              ) : (
+                                'Enviar Solicitud'
+                              )}
+                            </button>
+                          </form>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Acordar Fecha Límite (SLA)</label>
-                          <input
-                            type="date"
-                            value={requestCvForm.dueDate}
-                            onChange={e => setRequestCvForm({ ...requestCvForm, dueDate: e.target.value })}
-                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Mensaje Opcional</label>
-                          <textarea
-                            value={requestCvForm.description}
-                            onChange={e => setRequestCvForm({ ...requestCvForm, description: e.target.value })}
-                            placeholder={`Ej. Estamos buscando perfiles para ${selectedVacancy.role}...`}
-                            className="w-full px-3 py-2 rounded-lg border border-indigo-200 dark:border-indigo-800 dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                            rows="2"
-                          ></textarea>
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={submittingRequest || (!user?.institutionId && user?.role !== 'admin')}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-medium shadow-md shadow-indigo-500/20 transition-all flex items-center justify-center gap-2"
-                        >
-                          {submittingRequest ? (
-                            <>
-                              <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
-                              <span>Enviando...</span>
-                            </>
-                          ) : (
-                            'Enviar Solicitud'
-                          )}
-                        </button>
-                      </form>
-                    </div>
+                      )}
+                    </>
                   )}
                 </>
               )}

@@ -66,10 +66,12 @@ const Directorio = () => {
     } catch(err) { alert(err.message) }
   };
 
-  const filtered = contacts.filter(c => 
-    c.institutionName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.titular.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filtered = contacts
+    .filter(c => 
+      c.institutionName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.titular.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => a.institutionName.localeCompare(b.institutionName));
 
   return (
     <div className="space-y-10 animate-fade-in pb-20">

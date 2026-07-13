@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../App';
 import { API_URL } from '../config';
-import { Briefcase, Building, FileText, Clock, AlertCircle, PieChart, BarChart2, TrendingUp, Users } from 'lucide-react';
+import { Briefcase, Building, FileText, Clock, AlertCircle, PieChart, BarChart2, TrendingUp, Users, ShieldCheck } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -10,6 +10,7 @@ const Dashboard = () => {
     totalInstitutions: 0, 
     totalCvs: 0, 
     cvsInProcess: 0,
+    acceptedCvs: 0,
     requestStats: { requested: 0, sent: 0, open: 0 },
     vacanciesByInst: [],
     cvsByInst: [],
@@ -49,6 +50,7 @@ const Dashboard = () => {
     { title: 'Instituciones Red', value: metrics?.totalInstitutions || 0, icon: Building, color: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
     { title: 'CVs Totales', value: metrics?.totalCvs || 0, icon: FileText, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' },
     { title: 'CVs en trámite', value: metrics?.cvsInProcess || 0, icon: Clock, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' },
+    { title: 'Candidatos aceptados', value: metrics?.acceptedCvs || 0, icon: ShieldCheck, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' },
   ];
 
   const requestStats = metrics?.requestStats || { requested: 0, sent: 0, open: 0 };
@@ -72,7 +74,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
         {statCards.map((stat, idx) => (
           <div key={idx} className="glass-panel p-6 rounded-3xl flex items-center gap-5 transition-all hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 group">
             <div className={`p-3 rounded-2xl ${stat.bg} ${stat.color} transition-transform group-hover:scale-110 duration-300 flex-shrink-0`}>

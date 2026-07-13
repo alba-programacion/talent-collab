@@ -53,8 +53,8 @@ const Layout = ({ children }) => {
 
   useEffect(() => {
     console.log('Layout: User state changed:', user);
-    if (!user || user.role === 'universidad') {
-      console.log('Layout: Returning early (universidad or no user)');
+    if (!user) {
+      console.log('Layout: Returning early (no user)');
       return;
     }
 
@@ -81,12 +81,19 @@ const Layout = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.role === 'universidad') return;
+    if (!user) return;
 
     const checkTasksAndFines = async () => {
       try {
         const instId = user.institutionId || '';
-        const tasksUrl = user.role === 'admin' ? `${API_URL}/api/tasks` : `${API_URL}/api/tasks?institutionId=${instId}`;
+        let tasksUrl = '';
+        if (user.role === 'admin') {
+          tasksUrl = `${API_URL}/api/tasks`;
+        } else if (user.role === 'universidad') {
+          tasksUrl = `${API_URL}/api/tasks?email=${user.email}`;
+        } else {
+          tasksUrl = `${API_URL}/api/tasks?institutionId=${instId}`;
+        }
         const finesUrl = user.role === 'admin' ? `${API_URL}/api/fines` : `${API_URL}/api/fines?institutionId=${instId}`;
 
         const [tasksRes, finesRes] = await Promise.all([
@@ -96,7 +103,10 @@ const Layout = ({ children }) => {
 
         if (tasksRes.ok) {
           const tasksData = await tasksRes.json();
-          const pending = tasksData.some(t => t.status !== 'COMPLETED');
+          const validTasks = user.role === 'universidad'
+            ? tasksData.filter(t => !(t.senderEmail === user.email && (t.type === 'REQUEST_CVS' || t.description === 'Institución rechazó el CV' || t.description === 'Institución aceptó el CV')))
+            : tasksData;
+          const pending = validTasks.some(t => t.status !== 'COMPLETED');
           setHasPendingTasks(pending);
         }
         if (finesRes.ok) {
@@ -151,6 +161,7 @@ const Layout = ({ children }) => {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', adminOnly: true },
     { to: '/vacantes', icon: Briefcase, label: 'Vacantes' },
     { to: '/gestion-tareas', icon: CheckSquare, label: 'Gestión de Tareas' },
+    { to: '/tareas', icon: CheckSquare, label: 'Mis Tareas' },
     { to: '/cvs', icon: FileText, label: 'Repositorio de candidatos' },
     { to: '/instituciones', icon: Building, label: 'Instituciones', adminOnly: true },
     { to: '/directorio', icon: Book, label: 'Directorio' },
@@ -214,8 +225,12 @@ const Layout = ({ children }) => {
         <nav className="flex-1 px-4 py-6 space-y-2">
           {navItems.filter(item => {
              if (item.adminOnly && user?.role !== 'admin') return false;
-              // El perfil de usuario (role: 'universidad') solo tendrá acceso a vacantes, CVs y eventos
-              if (user?.role === 'universidad' && item.to !== '/vacantes' && item.to !== '/cvs' && item.to !== '/eventos') return false;
+             // El perfil de universidad solo ve vacantes, cvs, eventos y sus tareas específicas
+             if (user?.role === 'universidad') {
+               return item.to === '/vacantes' || item.to === '/cvs' || item.to === '/eventos' || item.to === '/tareas';
+             }
+             // Para management o admin, ocultamos el item de /tareas ya que tienen /gestion-tareas
+             if (item.to === '/tareas') return false;
              return true;
           }).map((item) => (
             <NavLink
@@ -231,7 +246,7 @@ const Layout = ({ children }) => {
             >
               <item.icon className="w-5 h-5" />
               <span>{item.label}</span>
-              {item.to === '/gestion-tareas' && (hasPendingTasks || hasPendingFines) && (
+              {(item.to === '/gestion-tareas' || item.to === '/tareas') && (hasPendingTasks || hasPendingFines) && (
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
               )}
             </NavLink>

@@ -105,6 +105,7 @@ function App() {
           <Route path="/colaboracion" element={<ProtectedRoute><Colaboracion /></ProtectedRoute>} />
           <Route path="/cvs" element={<ProtectedRoute><CVs /></ProtectedRoute>} />
           <Route path="/gestion-tareas" element={<ProtectedRoute><GestionTareas /></ProtectedRoute>} />
+          <Route path="/tareas" element={<ProtectedRoute><Tareas /></ProtectedRoute>} />
           <Route path="/instituciones" element={<ProtectedRoute><Instituciones /></ProtectedRoute>} />
           <Route path="/directorio" element={<ProtectedRoute><Directorio /></ProtectedRoute>} />
           <Route path="/eventos" element={<ProtectedRoute><Eventos /></ProtectedRoute>} />

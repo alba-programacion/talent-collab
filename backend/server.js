@@ -576,29 +576,49 @@ app.post('/api/auth/reset-password', async (req, res) => {
   }
 });
 
-// GET event details by title
-app.get('/api/events/:title', async (req, res) => {
+// Get all events for a specific category
+app.get('/api/events/category/:category', async (req, res) => {
   try {
-    const event = await Event.findOne({ title: req.params.title });
-    if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
-    res.json(event);
+    const events = await Event.find({ category: req.params.category }).sort({ createdAt: -1 });
+    res.json(events);
   } catch (e) {
-    res.status(550).json({ error: e.message });
+    res.status(500).json({ error: e.message });
   }
 });
 
-// Update event details (with optional image upload)
-app.post('/api/events/:title', upload.single('image'), async (req, res) => {
+// Create a new event
+app.post('/api/events/category/:category', upload.single('image'), async (req, res) => {
   try {
-    const { description } = req.body;
-    const { title } = req.params;
+    const { title, description } = req.body;
+    const { category } = req.params;
 
-    let event = await Event.findOne({ title });
-    if (!event) {
-      event = new Event({ title });
+    if (!title) return res.status(400).json({ error: 'El título es requerido' });
+
+    const event = new Event({ title, category, description: description || '' });
+
+    if (req.file) {
+      event.image = req.file.filename;
+      const fileInfo = getFileData(req.file);
+      event.imageData = fileInfo.data;
+      event.imageMimetype = fileInfo.mimetype;
     }
 
-    event.description = description || '';
+    await event.save();
+    res.status(201).json(event);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Update an existing event
+app.put('/api/events/:id', upload.single('image'), async (req, res) => {
+  try {
+    const { title, description } = req.body;
+    const event = await Event.findById(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
+
+    if (title) event.title = title;
+    if (description !== undefined) event.description = description;
 
     if (req.file) {
       event.image = req.file.filename;
@@ -611,6 +631,17 @@ app.post('/api/events/:title', upload.single('image'), async (req, res) => {
     res.json(event);
   } catch (e) {
     res.status(400).json({ error: e.message });
+  }
+});
+
+// Delete an event
+app.delete('/api/events/:id', async (req, res) => {
+  try {
+    const event = await Event.findByIdAndDelete(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Evento no encontrado' });
+    res.json({ message: 'Evento eliminado correctamente' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

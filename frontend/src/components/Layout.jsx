@@ -396,9 +396,18 @@ const Layout = ({ children }) => {
           </div>
         </div>
         
-        <div className="max-w-6xl w-full mx-auto">
+        <div className="max-w-6xl w-full mx-auto flex-1 flex flex-col">
           {children}
         </div>
+        
+        {/* Footer with Legal Links */}
+        <footer className="mt-8 pt-4 pb-2 text-center text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-800">
+          <p>© {new Date().getFullYear()} Sistema de Intercambio-AMIB. Todos los derechos reservados.</p>
+          <div className="flex justify-center gap-4 mt-2">
+            <NavLink to="/terminos" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Términos y Condiciones</NavLink>
+            <NavLink to="/privacidad" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Aviso de Privacidad</NavLink>
+          </div>
+        </footer>
       </main>
     </div>
   );

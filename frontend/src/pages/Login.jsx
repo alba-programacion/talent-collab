@@ -129,7 +129,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4 relative">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 p-4 relative">
+      <div className="flex-1 flex items-center justify-center w-full">
       <div className="absolute top-4 right-4">
         <button 
           onClick={toggleTheme}
@@ -347,6 +348,16 @@ const Login = () => {
 
 
       </div>
+      </div>
+      
+      {/* Footer with Legal Links */}
+      <footer className="mt-8 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+        <p>© {new Date().getFullYear()} Sistema de Intercambio-AMIB. Todos los derechos reservados.</p>
+        <div className="flex justify-center gap-4 mt-2">
+          <Link to="/terminos" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Términos y Condiciones</Link>
+          <Link to="/privacidad" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Aviso de Privacidad</Link>
+        </div>
+      </footer>
     </div>
   );
 };

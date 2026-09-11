@@ -129,6 +129,7 @@ const Vacantes = () => {
   useEffect(() => {
     if (selectedVacancy) {
       setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         const modalBody = document.getElementById('vacancy-modal-body');
         if (modalBody) modalBody.scrollTop = 0;
       }, 50);

@@ -18,6 +18,7 @@ const Register = () => {
   const [newInstName, setNewInstName] = useState('');
   const [newInstProfile, setNewInstProfile] = useState('');
   const [institutions, setInstitutions] = useState([]);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   // Verification states
   const [showVerification, setShowVerification] = useState(false);
@@ -39,6 +40,11 @@ const Register = () => {
     setLoading(true);
 
     try {
+      if (!acceptedTerms) {
+        setLoading(false);
+        return setError('Debes aceptar los Términos y Condiciones y el Aviso de Privacidad.');
+      }
+
       if (!institutionId && !newInstName) {
         setLoading(false);
         return setError('Selecciona una institución existente o ingresa el nombre de una nueva.');
@@ -108,7 +114,8 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-900 p-4 relative">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900 p-4 relative">
+      <div className="flex-1 flex items-center justify-center w-full">
       <div className="absolute top-4 right-4">
         <button 
           onClick={toggleTheme}
@@ -237,6 +244,22 @@ const Register = () => {
               )}
             </div>
 
+            <div className="flex items-start mt-4 mb-6">
+              <div className="flex items-center h-5">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="w-4 h-4 bg-gray-50 border-gray-300 rounded focus:ring-3 focus:ring-blue-300 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-blue-600 dark:ring-offset-gray-800"
+                  required
+                />
+              </div>
+              <label htmlFor="terms" className="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                He leído y acepto los <Link to="/terminos" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">Términos y Condiciones</Link> y el <Link to="/privacidad" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">Aviso de Privacidad</Link>.
+              </label>
+            </div>
+
             <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-xl font-medium transition-colors shadow-lg shadow-blue-500/30">
               {loading ? 'Registrando...' : 'Registrarse'}
             </button>
@@ -285,6 +308,16 @@ const Register = () => {
           </p>
         </div>
       </div>
+      </div>
+      
+      {/* Footer with Legal Links */}
+      <footer className="mt-8 py-4 text-center text-xs text-slate-500 dark:text-slate-400">
+        <p>© {new Date().getFullYear()} Sistema de Intercambio-AMIB. Todos los derechos reservados.</p>
+        <div className="flex justify-center gap-4 mt-2">
+          <Link to="/terminos" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Términos y Condiciones</Link>
+          <Link to="/privacidad" target="_blank" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Aviso de Privacidad</Link>
+        </div>
+      </footer>
     </div>
   );
 };

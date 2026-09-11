@@ -13,6 +13,8 @@ import Instituciones from './pages/Instituciones';
 import Directorio from './pages/Directorio';
 import GestionTareas from './pages/GestionTareas';
 import Eventos from './pages/Eventos';
+import Terminos from './pages/Terminos';
+import Privacidad from './pages/Privacidad';
 
 // Auth Context
 const AuthContext = createContext(null);
@@ -99,6 +101,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/terminos" element={<Terminos />} />
+          <Route path="/privacidad" element={<Privacidad />} />
           <Route path="/" element={<ProtectedRoute adminOnly={true}><Dashboard /></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute adminOnly={true}><Dashboard /></ProtectedRoute>} />
           <Route path="/vacantes" element={<ProtectedRoute><Vacantes /></ProtectedRoute>} />

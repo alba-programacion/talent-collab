@@ -1,0 +1,44 @@
+# Sistema de Intercambio AMIB: backend + frontend + MongoDB local
+# Uso:  cp .env.example .env   (editar valores)   y luego   docker compose up -d --build
+services:
+  mongo:
+    image: mongo:7.0
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+    volumes:
+      - mongo_data:/data/db
+    # Sin "ports": Mongo solo es accesible desde los otros contenedores
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      PORT: 5000
+      MONGODB_URI: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/talent-collab?authSource=admin
+      CLIENT_URL: ${CLIENT_URL}
+      BREVO_API_KEY: ${BREVO_API_KEY}
+      BREVO_FROM_EMAIL: ${BREVO_FROM_EMAIL}
+      BREVO_FROM_NAME: ${BREVO_FROM_NAME:-Sistema de Intercambio-AMIB}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "127.0.0.1:5000:5000"   # solo el Nginx del host puede llegar
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"     # solo el Nginx del host puede llegar
+
+volumes:
+  mongo_data:
+  uploads_data:

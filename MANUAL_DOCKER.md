@@ -65,6 +65,10 @@ Después, configurar Nginx del host y HTTPS como en [MANUAL_SERVIDOR_NGINX.md](M
 
 > Con Podman rootless, para que los contenedores arranquen tras reiniciar el servidor hace falta `loginctl enable-linger <usuario>` o un servicio systemd. Pídeselo a TI si no pueden.
 
+> **Puertos en el servidor de AMIB:** el 8080 ya lo usa otro contenedor, por eso el front se publica en `127.0.0.1:8081`. El Nginx del host debe apuntar a 8081. Antes de cambiar puertos, revisa con `ss -tlnp`.
+>
+> **Versión de compose:** el servidor trae `docker-compose 1.23.2`, que exige `version: "3.7"` en el archivo. Ya está incluido.
+
 ## 5. Actualizar después de cambios
 
 ```bash

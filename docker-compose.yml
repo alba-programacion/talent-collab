@@ -1,3 +1,5 @@
+version: "3.7"
+
 # Sistema de Intercambio AMIB: backend + frontend + MongoDB local
 # Uso:  cp .env.example .env   (editar valores)   y luego   docker compose up -d --build
 services:
@@ -37,7 +39,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:8080:80"     # solo el Nginx del host puede llegar
+      - "127.0.0.1:8081:80"     # solo el Nginx del host puede llegar
 
 volumes:
   mongo_data:

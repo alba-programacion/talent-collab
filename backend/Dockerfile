@@ -1,5 +1,5 @@
 # Usar una imagen oficial y ligera de Node.js (versión 20)
-FROM node:20-alpine
+FROM docker.io/library/node:20-alpine
 
 # Establecer la carpeta de trabajo dentro del contenedor
 WORKDIR /app

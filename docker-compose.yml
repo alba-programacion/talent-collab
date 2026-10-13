@@ -2,7 +2,7 @@
 # Uso:  cp .env.example .env   (editar valores)   y luego   docker compose up -d --build
 services:
   mongo:
-    image: mongo:7.0
+    image: docker.io/library/mongo:7.0
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
